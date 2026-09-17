@@ -5,6 +5,9 @@ spring:
     url: ${SOLID_DB_URL:jdbc:postgresql://localhost:5432/solid}
     username: ${SOLID_DB_USER:solid}
     password: ${SOLID_DB_PASSWORD:solid}
+    hikari:
+      # Every pooled connection runs as the restricted role so row-level security applies.
+      connection-init-sql: SET ROLE solid_app
   flyway:
     locations: classpath:db/migration
 
