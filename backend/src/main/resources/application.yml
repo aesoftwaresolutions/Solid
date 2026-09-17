@@ -23,5 +23,15 @@ management:
 
 server:
   port: 8081
+  forward-headers-strategy: framework
   error:
     include-stacktrace: never
+
+solid:
+  security:
+    # 32 random bytes, base64. Generate with: openssl rand -base64 32
+    # Back it up separately from the database: without it, encrypted fields can't be read.
+    master-key: ${SOLID_MASTER_KEY}
+  auth:
+    # When false, only the very first user (the instance admin) can sign up.
+    open-signup: ${SOLID_OPEN_SIGNUP:false}

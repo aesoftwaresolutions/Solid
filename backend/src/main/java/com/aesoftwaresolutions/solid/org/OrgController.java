@@ -1,5 +1,8 @@
 package com.aesoftwaresolutions.solid.org;
 
+import com.aesoftwaresolutions.solid.audit.AuditLog;
+import com.aesoftwaresolutions.solid.iam.CurrentUser;
+import com.aesoftwaresolutions.solid.iam.MembershipService;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.util.List;
@@ -13,21 +16,36 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-// NOTE: unauthenticated until slice 007 (users & MFA). Local development only.
+// Authentication and org membership are enforced by the iam module (SecurityConfig + OrgAccessInterceptor).
 @RestController
 @RequestMapping("/api/v1/orgs")
 class OrgController {
 
     private final OrgService orgs;
+    private final MembershipService memberships;
+    private final AuditLog audit;
 
-    OrgController(OrgService orgs) {
+    OrgController(OrgService orgs, MembershipService memberships, AuditLog audit) {
         this.orgs = orgs;
+        this.memberships = memberships;
+        this.audit = audit;
+    }
+
+    /** Organizations the current user belongs to. */
+    @GetMapping
+    List<Organization> mine() {
+        return memberships.orgIdsFor(CurrentUser.require().userId()).stream().map(orgs::getOrganization).toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @org.springframework.transaction.annotation.Transactional
     Organization create(@Valid @RequestBody OrgRequests.CreateOrganization body) {
-        return orgs.createOrganization(body.name(), body.kind());
+        Organization org = orgs.createOrganization(body.name(), body.kind());
+        memberships.addOwner(org.id(), CurrentUser.require().userId());
+        audit.record(AuditLog.Actor.current(), org.id(), "org_created", "organization", org.id(),
+                java.util.Map.of("kind", org.kind()));
+        return org;
     }
 
     @GetMapping("/{orgId}")

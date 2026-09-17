@@ -2,24 +2,74 @@ package com.aesoftwaresolutions.solid.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.aesoftwaresolutions.solid.iam.Base32;
+import com.aesoftwaresolutions.solid.iam.Totp;
 import com.fasterxml.jackson.databind.JsonNode;
+import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 
-/** Small helper for API tests: send JSON, assert the status, return the body as a JSON tree. */
+/**
+ * Helper for API tests: signs up a fresh user with MFA, then sends JSON with a bearer token, asserts the
+ * status and returns the body as a JSON tree.
+ */
 public class ApiClient {
 
-    private final TestRestTemplate http;
+    public static final String PASSWORD = "correct horse battery staple";
 
+    private final TestRestTemplate http;
+    private String token;
+    private String email;
+    private byte[] mfaSecret;
+
+    /** Creates and logs in a brand-new MFA-verified user. */
     public ApiClient(TestRestTemplate http) {
+        this(http, true);
+    }
+
+    public ApiClient(TestRestTemplate http, boolean login) {
         this.http = http;
         // JDK client supports PATCH.
         this.http.getRestTemplate().setRequestFactory(new JdkClientHttpRequestFactory());
+        if (login) {
+            signupAndLogin("user-" + UUID.randomUUID() + "@example.test");
+        }
+    }
+
+    public ApiClient signupAndLogin(String newEmail) {
+        this.email = newEmail;
+        this.token = null;
+        post("/api/v1/auth/signup", Map.of("email", newEmail, "password", PASSWORD, "displayName", "Test User"),
+                HttpStatus.CREATED);
+        this.token = post("/api/v1/auth/login", Map.of("email", newEmail, "password", PASSWORD), HttpStatus.OK)
+                .get("token").asText();
+        this.mfaSecret = Base32.decode(post("/api/v1/auth/mfa/enroll", Map.of(), HttpStatus.OK).get("secret").asText());
+        post("/api/v1/auth/mfa/activate", Map.of("code", Totp.codeAt(mfaSecret, Totp.stepAt(Instant.now()))), HttpStatus.OK);
+        return this;
+    }
+
+    public String email() {
+        return email;
+    }
+
+    public String token() {
+        return token;
+    }
+
+    public byte[] mfaSecret() {
+        return mfaSecret;
+    }
+
+    public ApiClient withToken(String newToken) {
+        this.token = newToken;
+        return this;
     }
 
     public JsonNode post(String path, Object body, HttpStatus expected) {
@@ -42,6 +92,10 @@ public class ApiClient {
         return get(path, HttpStatus.OK);
     }
 
+    public JsonNode delete(String path, HttpStatus expected) {
+        return exchange(HttpMethod.DELETE, path, null, expected);
+    }
+
     public String newOrg() {
         return post("/api/v1/orgs", Map.of("name", "Test Org", "kind", "business"), HttpStatus.CREATED)
                 .get("id").asText();
@@ -53,7 +107,11 @@ public class ApiClient {
     }
 
     private JsonNode exchange(HttpMethod method, String path, Object body, HttpStatus expected) {
-        ResponseEntity<JsonNode> response = http.exchange(path, method, new HttpEntity<>(body), JsonNode.class);
+        HttpHeaders headers = new HttpHeaders();
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+        ResponseEntity<JsonNode> response = http.exchange(path, method, new HttpEntity<>(body, headers), JsonNode.class);
         assertThat(response.getStatusCode()).as(method + " " + path + " -> " + response.getBody()).isEqualTo(expected);
         return response.getBody();
     }

@@ -3,6 +3,7 @@ package com.aesoftwaresolutions.solid.org;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.aesoftwaresolutions.solid.TestcontainersConfiguration;
+import com.aesoftwaresolutions.solid.support.ApiClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
 import java.util.UUID;
@@ -13,19 +14,23 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @Import(TestcontainersConfiguration.class)
 class OrgApiTests {
 
     @Autowired
-    TestRestTemplate http;
+    TestRestTemplate rest;
+
+    ApiClient api;
+
+    @org.junit.jupiter.api.BeforeEach
+    void login() {
+        api = new ApiClient(rest);
+    }
 
     private JsonNode post(String path, Object body, HttpStatus expected) {
-        ResponseEntity<JsonNode> response = http.postForEntity(path, body, JsonNode.class);
-        assertThat(response.getStatusCode()).as(path + " -> " + response.getBody()).isEqualTo(expected);
-        return response.getBody();
+        return api.post(path, body, expected);
     }
 
     private String newOrg(String name) {
@@ -132,13 +137,12 @@ class OrgApiTests {
         String bizInB = newEntity(orgB, "smllc", "Biz in B");
 
         // Listing B shows only B's entity
-        JsonNode listB = http.getForObject("/api/v1/orgs/" + orgB + "/entities", JsonNode.class);
+        JsonNode listB = api.get("/api/v1/orgs/" + orgB + "/entities");
         assertThat(listB).hasSize(1);
         assertThat(listB.get(0).get("id").asText()).isEqualTo(bizInB);
 
         // Fetching A's entity through org B's URL → 404
-        assertThat(http.getForEntity("/api/v1/orgs/" + orgB + "/entities/" + aliceInA, JsonNode.class)
-                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        api.get("/api/v1/orgs/" + orgB + "/entities/" + aliceInA, HttpStatus.NOT_FOUND);
 
         // Cross-org ownership → 404 (owner not visible in org B)
         post("/api/v1/orgs/" + orgB + "/ownerships", Map.of("ownerEntityId", aliceInA, "ownedEntityId", bizInB,
@@ -147,7 +151,6 @@ class OrgApiTests {
 
     @Test
     void ac7_unknownOrgIs404() {
-        assertThat(http.getForEntity("/api/v1/orgs/" + UUID.randomUUID() + "/entities", JsonNode.class)
-                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        api.get("/api/v1/orgs/" + UUID.randomUUID() + "/entities", HttpStatus.NOT_FOUND);
     }
 }

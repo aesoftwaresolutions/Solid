@@ -1,5 +1,6 @@
 package com.aesoftwaresolutions.solid.ledger;
 
+import com.aesoftwaresolutions.solid.audit.AuditLog;
 import com.aesoftwaresolutions.solid.common.BusinessRuleException;
 import com.aesoftwaresolutions.solid.common.Ids;
 import com.aesoftwaresolutions.solid.common.NotFoundException;
@@ -30,11 +31,13 @@ public class JournalService {
     private final JdbcClient db;
     private final OrgScope orgScope;
     private final OrgService orgs;
+    private final AuditLog audit;
 
-    JournalService(JdbcClient db, OrgScope orgScope, OrgService orgs) {
+    JournalService(JdbcClient db, OrgScope orgScope, OrgService orgs, AuditLog audit) {
         this.db = db;
         this.orgScope = orgScope;
         this.orgs = orgs;
+        this.audit = audit;
     }
 
     public record CreateResult(JournalEntry entry, boolean replayed) {
@@ -114,8 +117,11 @@ public class JournalService {
                 .map(l -> new NewLine(l.accountId(), l.amount().negate(), l.memo())).toList();
         String reversalMemo = memo != null ? memo
                 : "Reversal of " + original.entryDate() + (original.memo() == null ? "" : ": " + original.memo());
-        return create(orgId, entityId, reversalDate != null ? reversalDate : original.entryDate(), truncate(reversalMemo),
-                true, negated, null, "reversal", null, entryId).entry();
+        JournalEntry reversal = create(orgId, entityId, reversalDate != null ? reversalDate : original.entryDate(),
+                truncate(reversalMemo), true, negated, null, "reversal", null, entryId).entry();
+        audit.record(AuditLog.Actor.current(), orgId, "journal_entry_reversed", "journal_entry", entryId,
+                Map.of("entityId", entityId.toString(), "reversalEntryId", reversal.id().toString()));
+        return reversal;
     }
 
     public void deleteDraft(UUID orgId, UUID entityId, UUID entryId) {
@@ -166,10 +172,16 @@ public class JournalService {
 
     public LocalDate setPeriodLock(UUID orgId, UUID entityId, LocalDate lockedThrough) {
         orgs.getEntity(orgId, entityId);
+        LocalDate previous = periodLock(orgId, entityId).orElse(null);
         orgScope.run(orgId, () -> db.sql("""
                 insert into gl.period_lock (entity_id, org_id, locked_through) values (?, ?, ?)
                 on conflict (entity_id) do update set locked_through = excluded.locked_through, updated_at = now()""")
                 .params(entityId, orgId, lockedThrough).update());
+        Map<String, Object> details = new HashMap<>();
+        details.put("entityId", entityId.toString());
+        details.put("from", previous == null ? null : previous.toString());
+        details.put("to", lockedThrough.toString());
+        audit.record(AuditLog.Actor.current(), orgId, "period_lock_changed", "entity", entityId, details);
         return lockedThrough;
     }
 

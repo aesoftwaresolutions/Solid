@@ -136,14 +136,12 @@ class JournalApiTests {
     void ac3_postedEntriesCannotBeDeletedButDraftsCan() {
         String posted = api.post(base + "/journal-entries", software("2026-09-10", true), HttpStatus.CREATED)
                 .get("id").asText();
-        ResponseEntity<JsonNode> del = rest.exchange(base + "/journal-entries/" + posted, HttpMethod.DELETE, null, JsonNode.class);
-        assertThat(del.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(del.getBody().get("code").asText()).isEqualTo("ENTRY_POSTED");
+        JsonNode del = api.delete(base + "/journal-entries/" + posted, HttpStatus.CONFLICT);
+        assertThat(del.get("code").asText()).isEqualTo("ENTRY_POSTED");
 
         String draft = api.post(base + "/journal-entries", software("2026-09-10", false), HttpStatus.CREATED)
                 .get("id").asText();
-        assertThat(rest.exchange(base + "/journal-entries/" + draft, HttpMethod.DELETE, null, Void.class).getStatusCode())
-                .isEqualTo(HttpStatus.NO_CONTENT);
+        api.delete(base + "/journal-entries/" + draft, HttpStatus.NO_CONTENT);
         api.get(base + "/journal-entries/" + draft, HttpStatus.NOT_FOUND);
     }
 
@@ -206,6 +204,7 @@ class JournalApiTests {
     void ac8_idempotencyKeyPreventsDuplicates() {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Idempotency-Key", "bank-txn-123");
+        headers.setBearerAuth(api.token());
         ResponseEntity<JsonNode> first = rest.exchange(base + "/journal-entries", HttpMethod.POST,
                 new HttpEntity<>(software("2026-09-10", true), headers), JsonNode.class);
         ResponseEntity<JsonNode> second = rest.exchange(base + "/journal-entries", HttpMethod.POST,

@@ -10,7 +10,7 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 004 | Chart of accounts + tax-line codes (Schedule C template) | [004](004-chart-of-accounts.md) | Done (owner + CPA review) | 003 |
 | 005 | Journal posting (balanced, immutable, period lock) | [005](005-journal-posting.md) | Done (owner review) | 002, 004 |
 | 006 | Trial balance, P&L, balance sheet | [006](006-financial-reports.md) | Done (owner review) | 005 |
-| 007 | Users, login, mandatory MFA, audit log | — | Not started | 003 |
+| 007 | Users, login, mandatory MFA, audit log | [007](007-auth-mfa-audit.md) | Done (owner + security review) | 003 |
 | 008 | CSV/OFX import → review queue → categorize | — | Not started | 005 |
 | 009 | Bank reconciliation | — | Not started | 008 |
 | 010 | Tax-line report for preparers | — | Not started | 006 |

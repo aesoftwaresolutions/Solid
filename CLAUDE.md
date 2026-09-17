@@ -13,6 +13,7 @@ Owner is a beginner in Java/SQL/HTML: explain non-obvious code, keep diffs small
 - Frontend tests: `cd frontend && npm test`
 - Run full stack: `docker compose up --build` → http://localhost:8080 (API on :8081 when run from IDE)
 - Frontend dev server: `cd frontend && npm run dev` (proxies /api to :8081)
+- Local stack needs a `.env` with `SOLID_MASTER_KEY` (copy `.env.example`)
 - Backend tests need Docker running (Testcontainers starts PostgreSQL 16)
 - Test classes must end in `Tests` (e.g. `MoneyPropertyTests`) or Maven Surefire silently skips them
 

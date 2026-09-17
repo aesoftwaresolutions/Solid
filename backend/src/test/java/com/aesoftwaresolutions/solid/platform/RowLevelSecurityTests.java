@@ -23,7 +23,12 @@ class RowLevelSecurityTests {
 
     /** Tables allowed to exist without org_id / RLS. Adding to this list needs a written reason. */
     private static final Set<String> GLOBAL_TABLES = Set.of(
-            "org.organization" // listing filtered by membership in slice 007
+            "org.organization",      // visibility controlled by iam.membership (OrgAccessInterceptor)
+            "iam.user_account",      // identity spans organizations
+            "iam.session",           // identity spans organizations
+            "iam.mfa_recovery_code", // identity spans organizations
+            "iam.membership",        // needed to decide org access before an org scope exists
+            "audit.event"            // instance-wide chain; app role has INSERT/SELECT only, filtered by org in queries
     );
 
     @Autowired

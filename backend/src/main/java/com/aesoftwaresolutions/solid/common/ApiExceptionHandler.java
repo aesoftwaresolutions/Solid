@@ -21,6 +21,19 @@ class ApiExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, "Not found", e.getMessage());
     }
 
+    @ExceptionHandler(ForbiddenException.class)
+    ProblemDetail forbidden(ForbiddenException e) {
+        return problem(HttpStatus.FORBIDDEN, "Forbidden", e.getMessage());
+    }
+
+    @ExceptionHandler(ApiProblemException.class)
+    ProblemDetail apiProblem(ApiProblemException e) {
+        HttpStatus status = HttpStatus.valueOf(e.status());
+        ProblemDetail pd = problem(status, status.getReasonPhrase(), e.getMessage());
+        pd.setProperty("code", e.code());
+        return pd;
+    }
+
     @ExceptionHandler(BusinessRuleException.class)
     ProblemDetail businessRule(BusinessRuleException e) {
         ProblemDetail pd = problem(HttpStatus.CONFLICT, "Business rule violated", e.getMessage());

@@ -19,6 +19,8 @@ services:
       SOLID_DB_URL: jdbc:postgresql://postgres:5432/solid
       SOLID_DB_USER: solid
       SOLID_DB_PASSWORD: ${SOLID_DB_PASSWORD:-solid}
+      # Required. Generate once with `openssl rand -base64 32`, put it in .env, and back it up safely.
+      SOLID_MASTER_KEY: ${SOLID_MASTER_KEY:?Set SOLID_MASTER_KEY in .env (see .env.example)}
     depends_on:
       postgres:
         condition: service_healthy
