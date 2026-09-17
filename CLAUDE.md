@@ -14,6 +14,7 @@ Owner is a beginner in Java/SQL/HTML: explain non-obvious code, keep diffs small
 - Run full stack: `docker compose up --build` → http://localhost:8080 (API on :8081 when run from IDE)
 - Frontend dev server: `cd frontend && npm run dev` (proxies /api to :8081)
 - Backend tests need Docker running (Testcontainers starts PostgreSQL 16)
+- Test classes must end in `Tests` (e.g. `MoneyPropertyTests`) or Maven Surefire silently skips them
 
 ## Non-negotiable rules
 - IMPORTANT: Money is never float/double. Use the `Money` type (bigint cents in DB, BigDecimal in Java, string decimals in JSON).
