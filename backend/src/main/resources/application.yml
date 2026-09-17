@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: solid
+  datasource:
+    url: ${SOLID_DB_URL:jdbc:postgresql://localhost:5432/solid}
+    username: ${SOLID_DB_USER:solid}
+    password: ${SOLID_DB_PASSWORD:solid}
+  flyway:
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+server:
+  port: 8081
+  error:
+    include-stacktrace: never

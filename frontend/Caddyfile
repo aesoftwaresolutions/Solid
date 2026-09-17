@@ -1,0 +1,17 @@
+# Local/dev config. Production TLS + domain come with the installer slice.
+:8080 {
+	encode gzip
+	handle /api/* {
+		reverse_proxy app:8081
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}

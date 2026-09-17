@@ -4,7 +4,7 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 
 | # | Slice | Spec | Status | Depends on |
 |---|---|---|---|---|
-| 001 | Project skeleton (Spring Boot, Postgres/Testcontainers, React/Vite, Docker Compose, CI, license scan) | — | Not started | — |
+| 001 | Project skeleton (Spring Boot, Postgres/Testcontainers, React/Vite, Docker Compose, CI, license scan) | [001](001-project-skeleton.md) | Done (owner review) | — |
 | 002 | Money value type | — | Not started | 001 |
 | 003 | Organizations & entities + RLS | — | Not started | 001 |
 | 004 | Chart of accounts + tax-line codes (Schedule C template) | — | Not started | 003 |
