@@ -19,7 +19,7 @@ jobs:
           java-version: '21'
           cache: maven
       - name: Build, test (Testcontainers uses the runner's Docker) and license check
-        run: ./mvnw -B -Plicense-check verify
+        run: chmod +x mvnw && ./mvnw -B -Plicense-check verify
 
   frontend:
     runs-on: ubuntu-latest
