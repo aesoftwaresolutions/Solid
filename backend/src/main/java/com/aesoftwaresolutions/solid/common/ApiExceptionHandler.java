@@ -1,10 +1,13 @@
 package com.aesoftwaresolutions.solid.common;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -43,6 +46,31 @@ class ApiExceptionHandler {
                 .toList();
         pd.setProperty("errors", errors);
         return pd;
+    }
+
+    /**
+     * Database constraints and triggers are a safety net behind the application checks. If one fires,
+     * report a 409 instead of a 500, without leaking SQL details.
+     */
+    @ExceptionHandler({DataAccessException.class, TransactionSystemException.class})
+    ProblemDetail database(RuntimeException e) {
+        String state = sqlState(e);
+        if (state != null && (state.startsWith("23") || state.equals("P0001"))) {
+            ProblemDetail pd = problem(HttpStatus.CONFLICT, "Business rule violated",
+                    "The change conflicts with existing data or a bookkeeping rule");
+            pd.setProperty("code", state.equals("P0001") ? "RULE_VIOLATION" : "CONSTRAINT_VIOLATION");
+            return pd;
+        }
+        throw e;
+    }
+
+    private static String sqlState(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof SQLException sql && sql.getSQLState() != null) {
+                return sql.getSQLState();
+            }
+        }
+        return null;
     }
 
     private static ProblemDetail problem(HttpStatus status, String title, String detail) {

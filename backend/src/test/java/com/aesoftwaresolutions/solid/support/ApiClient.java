@@ -30,6 +30,10 @@ public class ApiClient {
         return exchange(HttpMethod.PATCH, path, body, expected);
     }
 
+    public JsonNode put(String path, Object body) {
+        return exchange(HttpMethod.PUT, path, body, HttpStatus.OK);
+    }
+
     public JsonNode get(String path, HttpStatus expected) {
         return exchange(HttpMethod.GET, path, null, expected);
     }
