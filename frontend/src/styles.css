@@ -1,0 +1,169 @@
+:root {
+  --ink: #16202c;
+  --muted: #5d6b7a;
+  --line: #d9e0e7;
+  --bg: #f6f8fa;
+  --accent: #14532d;
+  --danger: #9f1239;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+nav.top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid var(--line);
+}
+
+nav.top a {
+  color: var(--ink);
+}
+
+nav.top .spacer {
+  flex: 1;
+}
+
+h1 {
+  font-size: 1.4rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.card-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+th.money,
+td.money {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  max-width: 100%;
+}
+
+button {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  cursor: pointer;
+}
+
+button.secondary {
+  background: white;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.error {
+  color: var(--danger);
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.notice {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.stat {
+  flex: 1 1 140px;
+}
+
+.stat .value {
+  font-size: 1.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+code {
+  background: #eef2f6;
+  padding: 2px 4px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+@media (max-width: 480px) {
+  table {
+    font-size: 0.85rem;
+  }
+}

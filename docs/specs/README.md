@@ -14,5 +14,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 008 | CSV/OFX import → review queue → categorize | [008](008-bank-import-categorize.md) | Done (owner review) | 005 |
 | 009 | Bank reconciliation | [009](009-bank-reconciliation.md) | Done (owner review) | 008 |
 | 010 | Tax-line report for preparers | [010](010-tax-line-report.md) | Done (owner + CPA review) | 006 |
+| 011 | Web UI (login/MFA, books, reports) | [011](011-web-ui.md) | Done (owner review) | 007, 010 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done
