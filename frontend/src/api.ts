@@ -707,6 +707,8 @@ export const api = {
     request<TrialBalance>(`/orgs/${orgId}/entities/${entityId}/reports/trial-balance?asOf=${asOf}`),
   taxLines: (orgId: string, entityId: string, taxYear: number) =>
     request<TaxLineReport>(`/orgs/${orgId}/entities/${entityId}/reports/tax-lines?taxYear=${taxYear}`),
+  customerStatementPdfUrl: (orgId: string, entityId: string, customerId: string) =>
+    `/api/v1/orgs/${orgId}/entities/${entityId}/customers/${customerId}/statement.pdf`,
   invoicePdfUrl: (orgId: string, entityId: string, invoiceId: string) =>
     `/api/v1/orgs/${orgId}/entities/${entityId}/invoices/${invoiceId}/pdf`,
   entityExportUrl: (orgId: string, entityId: string) =>

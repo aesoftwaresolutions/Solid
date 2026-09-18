@@ -53,7 +53,10 @@ export default function SalesPage() {
           {(customers.value ?? []).map((customer) => (
             <li key={customer.id}>
               {customer.name}
-              {customer.email ? ` · ${customer.email}` : ''}
+              {customer.email ? ` · ${customer.email}` : ''}{' '}
+              <a href={api.customerStatementPdfUrl(orgId, entityId, customer.id)} download>
+                statement
+              </a>
             </li>
           ))}
         </ul>
