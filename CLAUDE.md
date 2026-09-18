@@ -16,6 +16,7 @@ Owner is a beginner in Java/SQL/HTML: explain non-obvious code, keep diffs small
 - Local stack needs a `.env` with `SOLID_MASTER_KEY` (copy `.env.example`)
 - Backend tests need Docker running (Testcontainers starts PostgreSQL 16)
 - Operator guide (backups, restore, upgrades): docs/operations.md; scripts in ops/
+- API guide: docs/api.md (generated OpenAPI at /v3/api-docs, UI at /swagger-ui/index.html)
 - Test classes must end in `Tests` (e.g. `MoneyPropertyTests`) or Maven Surefire silently skips them
 
 ## Non-negotiable rules

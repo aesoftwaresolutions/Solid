@@ -54,6 +54,9 @@ class SecurityConfig {
                         .requestMatchers("/api/v1/auth/mfa/**", "/api/v1/auth/logout", "/api/v1/auth/me")
                         .hasAnyAuthority("USER", "MFA_PENDING")
                         .requestMatchers("/api/**").hasAuthority("USER")
+                        // The API description is not public: it maps out one household's or business's server.
+                        .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                        .hasAuthority("USER")
                         .anyRequest().denyAll())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((request, response, ex) ->
