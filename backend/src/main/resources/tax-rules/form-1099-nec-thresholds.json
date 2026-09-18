@@ -1,0 +1,14 @@
+{
+  "form": "1099-NEC",
+  "description": "Minimum total paid to a nonemployee in a calendar year that triggers a Form 1099-NEC.",
+  "source": "Pre-2026 amount is the long-standing $600 threshold in the IRS Instructions for Forms 1099-MISC and 1099-NEC. The 2026 amount reflects the increase to $2,000 enacted by the One Big Beautiful Bill Act (2025), indexed for inflation from 2027. VERIFY both against the current IRS instructions before relying on them; the indexed years are intentionally absent.",
+  "thresholds": [
+    { "taxYear": 2023, "amount": "600.00" },
+    { "taxYear": 2024, "amount": "600.00" },
+    { "taxYear": 2025, "amount": "600.00" },
+    { "taxYear": 2026, "amount": "2000.00" }
+  ],
+  "todo": [
+    "2027 and later: inflation-indexed amount not yet published by the IRS — do not guess."
+  ]
+}

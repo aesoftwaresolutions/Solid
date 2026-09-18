@@ -16,5 +16,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 010 | Tax-line report for preparers | [010](010-tax-line-report.md) | Done (owner + CPA review) | 006 |
 | 011 | Web UI (login/MFA, books, reports) | [011](011-web-ui.md) | Done (owner review) | 007, 010 |
 | 012 | Customers, invoices & receipts (A/R) | [012](012-invoicing-ar.md) | Done (owner review) | 005 |
+| 013 | Vendors, bills (A/P) & 1099 tracking | [013](013-vendors-bills-1099.md) | Done (owner + CPA review) | 005 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done
