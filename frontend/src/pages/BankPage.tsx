@@ -1,6 +1,6 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, formatMoney, type Account, type BankTransaction } from '../api';
+import { api, formatMoney, type Account, type BankTransaction, type StoredDocument } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
 
 export default function BankPage() {
@@ -8,6 +8,8 @@ export default function BankPage() {
   const accounts = useLoader(() => api.accounts(orgId, entityId), [orgId, entityId]);
   const bankAccounts = useLoader(() => api.bankAccounts(orgId, entityId), [orgId, entityId]);
   const queue = useLoader(() => api.bankTransactions(orgId, entityId, 'new'), [orgId, entityId]);
+  const rules = useLoader(() => api.categorizationRules(orgId, entityId), [orgId, entityId]);
+  const documents = useLoader(() => api.documents(orgId, entityId), [orgId, entityId]);
 
   const [selectedBankAccount, setSelectedBankAccount] = useState('');
   const [importMessage, setImportMessage] = useState<string | null>(null);
@@ -21,6 +23,16 @@ export default function BankPage() {
     [accounts.value],
   );
   const bankAccountId = selectedBankAccount || bankAccounts.value?.[0]?.id || '';
+
+  const accountLabel = (id: string) => {
+    const account = postable.find((a) => a.id === id);
+    return account ? `${account.code} ${account.name}` : id;
+  };
+
+  const attachedTo = (txnId: string): StoredDocument[] =>
+    (documents.value ?? []).filter((document) =>
+      document.links.some((link) => link.objectType === 'bank_transaction' && link.objectId === txnId),
+    );
 
   const upload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -57,6 +69,48 @@ export default function BankPage() {
       .then(() => {
         setConfirmation(`Recorded ${txn.postedDate} · ${formatMoney(txn.amount)} · ${txn.description}`);
         queue.reload();
+      })
+      .catch(setActionError)
+      .finally(() => setBusy(false));
+  };
+
+  /** Everything reviewed on screen, saved in one request instead of one per row. */
+  const saveAllReviewed = () => {
+    const items = (queue.value ?? [])
+      .map((txn) => ({ id: txn.id, accountId: chosen[txn.id] ?? txn.suggestedAccountId ?? '' }))
+      .filter((item) => item.accountId !== '');
+    if (items.length === 0) {
+      setActionError(new Error('Pick a category on at least one row first'));
+      return;
+    }
+    setBusy(true);
+    setActionError(undefined);
+    api
+      .categorizeAll(orgId, entityId, items)
+      .then(() => {
+        setConfirmation(`Recorded ${items.length} transaction(s).`);
+        setChosen({});
+        queue.reload();
+      })
+      .catch(setActionError)
+      .finally(() => setBusy(false));
+  };
+
+  /** Uploads the receipt and staples it to this transaction before the row leaves the queue. */
+  const attachReceipt = (txn: BankTransaction, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+    setBusy(true);
+    setActionError(undefined);
+    api
+      .uploadDocument(orgId, entityId, file, 'receipt', txn.description)
+      .then((document) => api.linkDocument(orgId, entityId, document.id, 'bank_transaction', txn.id))
+      .then(() => {
+        setConfirmation(`Attached ${file.name} to ${txn.description}`);
+        documents.reload();
       })
       .catch(setActionError)
       .finally(() => setBusy(false));
@@ -106,6 +160,58 @@ export default function BankPage() {
         )}
       </Card>
 
+      <Card title="Rules">
+        <ErrorMessage error={rules.error} />
+        <p className="muted">
+          When a description contains the text, Solid suggests that account. The lowest priority number wins.
+        </p>
+        {postable.length > 0 && (
+          <NewRule orgId={orgId} entityId={entityId} accounts={postable} onCreated={rules.reload} />
+        )}
+        {rules.value && rules.value.length === 0 && <p className="muted">No rules yet.</p>}
+        {rules.value && rules.value.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>When the description contains</th>
+                <th>Category</th>
+                <th>Priority</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {[...rules.value]
+                .sort((a, b) => a.priority - b.priority || a.contains.localeCompare(b.contains))
+                .map((rule) => (
+                  <tr key={rule.id}>
+                    <td>{rule.contains}</td>
+                    <td>{accountLabel(rule.accountId)}</td>
+                    <td>{rule.priority}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => {
+                          setBusy(true);
+                          setActionError(undefined);
+                          api
+                            .deleteCategorizationRule(orgId, entityId, rule.id)
+                            .then(rules.reload)
+                            .catch(setActionError)
+                            .finally(() => setBusy(false));
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
       <Card title="Review queue">
         {confirmation && <p className="notice">{confirmation}</p>}
         {!queue.value && !queue.error && <Loading what="transactions" />}
@@ -118,6 +224,7 @@ export default function BankPage() {
                 <th>Description</th>
                 <th className="money">Amount</th>
                 <th>Category</th>
+                <th>Receipt</th>
                 <th />
               </tr>
             </thead>
@@ -146,6 +253,22 @@ export default function BankPage() {
                     {txn.suggestionSource && <div className="muted">suggested from {txn.suggestionSource}</div>}
                   </td>
                   <td>
+                    {attachedTo(txn.id).map((document) => (
+                      <div key={document.id}>
+                        <a href={api.documentContentUrl(orgId, entityId, document.id)}>{document.filename}</a>
+                      </div>
+                    ))}
+                    <label className="visually-hidden" htmlFor={`receipt-${txn.id}`}>
+                      Receipt for {txn.description}
+                    </label>
+                    <input
+                      id={`receipt-${txn.id}`}
+                      type="file"
+                      disabled={busy}
+                      onChange={(event) => attachReceipt(txn, event)}
+                    />
+                  </td>
+                  <td>
                     <button type="button" onClick={() => categorize(txn)} disabled={busy}>
                       Save
                     </button>{' '}
@@ -158,8 +281,72 @@ export default function BankPage() {
             </tbody>
           </table>
         )}
+        {queue.value && queue.value.length > 0 && (
+          <button type="button" onClick={saveAllReviewed} disabled={busy}>
+            Save all reviewed
+          </button>
+        )}
       </Card>
     </main>
+  );
+}
+
+function NewRule({
+  orgId,
+  entityId,
+  accounts,
+  onCreated,
+}: {
+  orgId: string;
+  entityId: string;
+  accounts: Account[];
+  onCreated: () => void;
+}) {
+  const [contains, setContains] = useState('');
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
+  const [priority, setPriority] = useState('100');
+  const [error, setError] = useState<unknown>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError(undefined);
+        api
+          .createCategorizationRule(orgId, entityId, contains.trim(), accountId, Number(priority))
+          .then(() => {
+            setContains('');
+            onCreated();
+          })
+          .catch(setError)
+          .finally(() => setBusy(false));
+      }}
+    >
+      <ErrorMessage error={error} />
+      <label>
+        Description contains
+        <input value={contains} required minLength={2} maxLength={100} onChange={(e) => setContains(e.target.value)} />
+      </label>
+      <label>
+        Category
+        <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+          {accounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.code} {account.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Priority
+        <input value={priority} inputMode="numeric" onChange={(e) => setPriority(e.target.value)} />
+      </label>
+      <button type="submit" disabled={busy}>
+        Add rule
+      </button>
+    </form>
   );
 }
 

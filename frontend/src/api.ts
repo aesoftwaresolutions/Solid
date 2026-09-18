@@ -312,6 +312,14 @@ export interface JournalEntry {
   lines: JournalLine[];
 }
 
+export interface CategorizationRule {
+  id: string;
+  entityId: string;
+  contains: string;
+  accountId: string;
+  priority: number;
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -546,6 +554,21 @@ export const api = {
     request<{ lockedThrough: string | null }>(`/orgs/${orgId}/entities/${entityId}/period-lock`, {
       method: 'PUT',
       ...json({ lockedThrough }),
+    }),
+
+  categorizationRules: (orgId: string, entityId: string) =>
+    request<CategorizationRule[]>(`/orgs/${orgId}/entities/${entityId}/categorization-rules`),
+  createCategorizationRule: (orgId: string, entityId: string, contains: string, accountId: string, priority: number) =>
+    request<CategorizationRule>(`/orgs/${orgId}/entities/${entityId}/categorization-rules`, {
+      method: 'POST',
+      ...json({ contains, accountId, priority }),
+    }),
+  deleteCategorizationRule: (orgId: string, entityId: string, ruleId: string) =>
+    request<void>(`/orgs/${orgId}/entities/${entityId}/categorization-rules/${ruleId}`, { method: 'DELETE' }),
+  categorizeAll: (orgId: string, entityId: string, items: { id: string; accountId: string }[]) =>
+    request<BankTransaction[]>(`/orgs/${orgId}/entities/${entityId}/bank-transactions/categorize`, {
+      method: 'POST',
+      ...json({ items }),
     }),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
