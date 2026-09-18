@@ -118,6 +118,20 @@ public class BillingService {
         });
     }
 
+    /** One customer, for the invoice PDF and any screen that needs a name and address. */
+    public BillingModels.Customer getCustomer(UUID orgId, UUID entityId, UUID customerId) {
+        return listCustomers(orgId, entityId).stream().filter(c -> c.id().equals(customerId)).findFirst()
+                .orElseThrow(() -> new com.aesoftwaresolutions.solid.common.NotFoundException(
+                        "Customer " + customerId + " not found"));
+    }
+
+    /** The invoice rendered as a PDF the customer can be handed. */
+    public byte[] invoicePdf(UUID orgId, UUID entityId, UUID invoiceId) {
+        BillingModels.Invoice invoice = getInvoice(orgId, entityId, invoiceId);
+        return InvoicePdf.render(orgs.getEntity(orgId, entityId), getCustomer(orgId, entityId, invoice.customerId()),
+                invoice);
+    }
+
     public BillingModels.Invoice getInvoice(UUID orgId, UUID entityId, UUID invoiceId) {
         orgs.getEntity(orgId, entityId);
         return orgScope.call(orgId, () -> loadInvoice(entityId, invoiceId));

@@ -94,6 +94,20 @@ class BillingController {
                 body.memo(), lines(body));
     }
 
+    @GetMapping("/invoices/{invoiceId}/pdf")
+    org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> invoicePdf(
+            @PathVariable UUID orgId, @PathVariable UUID entityId, @PathVariable UUID invoiceId) {
+        BillingModels.Invoice invoice = billing.getInvoice(orgId, entityId, invoiceId);
+        byte[] pdf = billing.invoicePdf(orgId, entityId, invoiceId);
+        String name = "invoice-" + (invoice.invoiceNumber() == null ? invoice.id() : invoice.invoiceNumber()) + ".pdf";
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        org.springframework.http.ContentDisposition.attachment().filename(name).build().toString())
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .contentLength(pdf.length)
+                .body(new org.springframework.core.io.ByteArrayResource(pdf));
+    }
+
     @PostMapping("/invoices/{invoiceId}/finalize")
     BillingModels.Invoice finalizeInvoice(@PathVariable UUID orgId, @PathVariable UUID entityId,
                                           @PathVariable UUID invoiceId) {

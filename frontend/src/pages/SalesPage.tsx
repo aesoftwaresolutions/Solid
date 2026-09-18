@@ -104,6 +104,9 @@ export default function SalesPage() {
                   <td className="money">{formatMoney(invoice.total)}</td>
                   <td className="money">{formatMoney(invoice.balanceDue)}</td>
                   <td>
+                    <a href={api.invoicePdfUrl(orgId, entityId, invoice.id)} download>
+                      PDF
+                    </a>{' '}
                     {invoice.status === 'draft' && (
                       <button
                         type="button"

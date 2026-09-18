@@ -34,5 +34,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 028 | Opening balances | [028](028-opening-balances.md) | Done (owner + CPA review) | 005 |
 | 029 | API documentation (OpenAPI) | [029](029-api-documentation.md) | Done (owner review) | 007 |
 | 030 | Category suggestions from a local model | [030](030-ai-category-suggestions.md) | Done (owner + security review) | 008 |
+| 031 | Invoice PDF | [031](031-invoice-pdf.md) | Done (owner review) | 012 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done
