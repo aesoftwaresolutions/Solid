@@ -41,6 +41,9 @@ export default function EntitiesPage() {
       <p className="muted">
         An entity is a person or business that keeps its own books — for example you personally and your LLC.
       </p>
+      <p>
+        <Link to={`/orgs/${orgId}/settings`}>People and activity</Link>
+      </p>
       <ErrorMessage error={error} />
       {!entities && !error && <Loading what="entities" />}
 

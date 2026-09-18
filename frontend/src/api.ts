@@ -328,6 +328,26 @@ export interface TaxRuleCoverage {
   note: string;
 }
 
+export interface Member {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: string;
+}
+
+export interface AuditEvent {
+  seq: number;
+  id: string;
+  occurredAt: string;
+  orgId: string | null;
+  actorUserId: string | null;
+  actorIp: string | null;
+  action: string;
+  objectType: string | null;
+  objectId: string | null;
+  details: Record<string, unknown>;
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -581,6 +601,12 @@ export const api = {
 
   taxRuleCoverage: (taxYear: number) =>
     request<TaxRuleCoverage>(`/tax/rule-coverage?taxYear=${taxYear}`),
+
+  members: (orgId: string) => request<Member[]>(`/orgs/${orgId}/members`),
+  addMember: (orgId: string, email: string, role: string) =>
+    request<Member>(`/orgs/${orgId}/members`, { method: 'POST', ...json({ email, role }) }),
+  auditEvents: (orgId: string, limit: number) =>
+    request<AuditEvent[]>(`/orgs/${orgId}/audit-events?limit=${limit}`),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),
