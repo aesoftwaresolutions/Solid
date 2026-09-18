@@ -23,7 +23,7 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
     ProblemDetail tooLarge(org.springframework.web.multipart.MaxUploadSizeExceededException e) {
-        return problem(HttpStatus.BAD_REQUEST, "File too large", "File is too large (maximum 5 MB)");
+        return problem(HttpStatus.BAD_REQUEST, "File too large", "That file is larger than this server accepts");
     }
 
     @ExceptionHandler(ForbiddenException.class)

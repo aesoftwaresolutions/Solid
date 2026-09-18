@@ -19,5 +19,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 013 | Vendors, bills (A/P) & 1099 tracking | [013](013-vendors-bills-1099.md) | Done (owner + CPA review) | 005 |
 | 014 | Fixed assets & book depreciation | [014](014-fixed-assets-depreciation.md) | Done (owner + CPA review) | 005 |
 | 015 | Mileage log & home office | [015](015-mileage-home-office.md) | Done (owner + CPA review) | 003 |
+| 016 | Receipts & document vault | [016](016-document-vault.md) | Done (owner + security review) | 007 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

@@ -12,8 +12,8 @@ spring:
     locations: classpath:db/migration
   servlet:
     multipart:
-      max-file-size: 6MB
-      max-request-size: 7MB
+      max-file-size: 26MB
+      max-request-size: 27MB
 
 management:
   endpoints:
@@ -36,6 +36,9 @@ solid:
     # 32 random bytes, base64. Generate with: openssl rand -base64 32
     # Back it up separately from the database: without it, encrypted fields can't be read.
     master-key: ${SOLID_MASTER_KEY}
+  documents:
+    # Where uploaded files are stored (encrypted). In Docker this is a volume.
+    root: ${SOLID_DOCUMENTS_ROOT:./data/documents}
   auth:
     # When false, only the very first user (the instance admin) can sign up.
     open-signup: ${SOLID_OPEN_SIGNUP:false}

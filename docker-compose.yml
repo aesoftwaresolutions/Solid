@@ -21,6 +21,10 @@ services:
       SOLID_DB_PASSWORD: ${SOLID_DB_PASSWORD:-solid}
       # Required. Generate once with `openssl rand -base64 32`, put it in .env, and back it up safely.
       SOLID_MASTER_KEY: ${SOLID_MASTER_KEY:?Set SOLID_MASTER_KEY in .env (see .env.example)}
+      SOLID_DOCUMENTS_ROOT: /var/lib/solid/documents
+    volumes:
+      # Uploaded receipts and statements, encrypted with SOLID_MASTER_KEY. Back this up with the database.
+      - documents:/var/lib/solid/documents
     depends_on:
       postgres:
         condition: service_healthy
@@ -34,3 +38,4 @@ services:
 
 volumes:
   pgdata:
+  documents:
