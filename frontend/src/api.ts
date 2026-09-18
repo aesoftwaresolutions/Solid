@@ -134,6 +134,123 @@ export interface TaxLineReport {
   };
 }
 
+export interface Customer {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  isArchived: boolean;
+}
+
+export interface InvoiceLine {
+  id: string;
+  lineNo: number;
+  description: string;
+  quantity: string;
+  unitPrice: Money;
+  amount: Money;
+  incomeAccountId: string;
+}
+
+export interface Invoice {
+  id: string;
+  customerId: string;
+  invoiceNumber: string | null;
+  issueDate: string;
+  dueDate: string;
+  terms: string;
+  memo: string | null;
+  total: Money;
+  amountPaid: Money;
+  balanceDue: Money;
+  status: string;
+  lines: InvoiceLine[];
+}
+
+export interface Vendor {
+  id: string;
+  name: string;
+  email: string | null;
+  taxIdLast4: string | null;
+  taxClassification: string | null;
+  is1099Vendor: boolean;
+  defaultExpenseAccountId: string | null;
+  isArchived: boolean;
+}
+
+export interface BillLine {
+  id: string;
+  lineNo: number;
+  description: string;
+  amount: Money;
+  expenseAccountId: string;
+}
+
+export interface Bill {
+  id: string;
+  vendorId: string;
+  vendorReference: string | null;
+  billDate: string;
+  dueDate: string;
+  terms: string;
+  memo: string | null;
+  total: Money;
+  amountPaid: Money;
+  balanceDue: Money;
+  status: string;
+  lines: BillLine[];
+}
+
+export interface AgingBucket {
+  customerId: string;
+  customerName: string;
+  current: Money;
+  days1to30: Money;
+  days31to60: Money;
+  days61to90: Money;
+  days90plus: Money;
+  total: Money;
+}
+
+export interface AgingReport {
+  asOf: string;
+  currency: string;
+  customers: AgingBucket[];
+  totals: AgingBucket;
+}
+
+export interface Form1099Report {
+  taxYear: number;
+  thresholdKnown: boolean;
+  threshold: Money | null;
+  thresholdSource: string | null;
+  note: string;
+  vendors: {
+    vendorId: string;
+    vendorName: string;
+    paidInYear: Money;
+    meetsThreshold: boolean;
+    missingInformation: string[];
+  }[];
+}
+
+export interface DocumentLink {
+  objectType: string;
+  objectId: string;
+}
+
+export interface StoredDocument {
+  id: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
+  kind: string;
+  note: string | null;
+  uploadedAt: string;
+  links: DocumentLink[];
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -235,6 +352,109 @@ export const api = {
       method: 'POST',
       ...json({}),
     }),
+
+  customers: (orgId: string, entityId: string) =>
+    request<Customer[]>(`/orgs/${orgId}/entities/${entityId}/customers`),
+  createCustomer: (orgId: string, entityId: string, name: string, email?: string) =>
+    request<Customer>(`/orgs/${orgId}/entities/${entityId}/customers`, { method: 'POST', ...json({ name, email }) }),
+  invoices: (orgId: string, entityId: string, status?: string) =>
+    request<Invoice[]>(`/orgs/${orgId}/entities/${entityId}/invoices${status ? `?status=${status}` : ''}`),
+  createInvoice: (
+    orgId: string,
+    entityId: string,
+    body: {
+      customerId: string;
+      issueDate: string;
+      terms: string;
+      memo?: string;
+      lines: { description: string; quantity: string; unitPrice: Money; incomeAccountId: string }[];
+    },
+  ) => request<Invoice>(`/orgs/${orgId}/entities/${entityId}/invoices`, { method: 'POST', ...json(body) }),
+  finalizeInvoice: (orgId: string, entityId: string, invoiceId: string) =>
+    request<Invoice>(`/orgs/${orgId}/entities/${entityId}/invoices/${invoiceId}/finalize`, { method: 'POST' }),
+  voidInvoice: (orgId: string, entityId: string, invoiceId: string) =>
+    request<Invoice>(`/orgs/${orgId}/entities/${entityId}/invoices/${invoiceId}/void`, { method: 'POST' }),
+  recordPayment: (
+    orgId: string,
+    entityId: string,
+    body: {
+      customerId: string;
+      receivedDate: string;
+      depositAccountId: string;
+      method?: string;
+      reference?: string;
+      applications: { invoiceId: string; amount: Money }[];
+    },
+  ) => request<unknown>(`/orgs/${orgId}/entities/${entityId}/payments`, { method: 'POST', ...json(body) }),
+  arAging: (orgId: string, entityId: string, asOf: string) =>
+    request<AgingReport>(`/orgs/${orgId}/entities/${entityId}/reports/accounts-receivable-aging?asOf=${asOf}`),
+
+  vendors: (orgId: string, entityId: string) => request<Vendor[]>(`/orgs/${orgId}/entities/${entityId}/vendors`),
+  createVendor: (
+    orgId: string,
+    entityId: string,
+    body: { name: string; email?: string; is1099Vendor?: boolean; taxIdLast4?: string; taxClassification?: string },
+  ) => request<Vendor>(`/orgs/${orgId}/entities/${entityId}/vendors`, { method: 'POST', ...json(body) }),
+  bills: (orgId: string, entityId: string, status?: string) =>
+    request<Bill[]>(`/orgs/${orgId}/entities/${entityId}/bills${status ? `?status=${status}` : ''}`),
+  createBill: (
+    orgId: string,
+    entityId: string,
+    body: {
+      vendorId: string;
+      billDate: string;
+      terms: string;
+      vendorReference?: string;
+      memo?: string;
+      lines: { description: string; amount: Money; expenseAccountId: string }[];
+    },
+  ) => request<Bill>(`/orgs/${orgId}/entities/${entityId}/bills`, { method: 'POST', ...json(body) }),
+  approveBill: (orgId: string, entityId: string, billId: string) =>
+    request<Bill>(`/orgs/${orgId}/entities/${entityId}/bills/${billId}/approve`, { method: 'POST' }),
+  voidBill: (orgId: string, entityId: string, billId: string) =>
+    request<Bill>(`/orgs/${orgId}/entities/${entityId}/bills/${billId}/void`, { method: 'POST' }),
+  payBills: (
+    orgId: string,
+    entityId: string,
+    body: {
+      vendorId: string;
+      paidDate: string;
+      paymentAccountId: string;
+      method?: string;
+      reference?: string;
+      applications: { billId: string; amount: Money }[];
+    },
+  ) => request<unknown>(`/orgs/${orgId}/entities/${entityId}/bill-payments`, { method: 'POST', ...json(body) }),
+  apAging: (orgId: string, entityId: string, asOf: string) =>
+    request<AgingReport>(`/orgs/${orgId}/entities/${entityId}/reports/accounts-payable-aging?asOf=${asOf}`),
+  form1099Candidates: (orgId: string, entityId: string, taxYear: number) =>
+    request<Form1099Report>(`/orgs/${orgId}/entities/${entityId}/reports/form-1099-candidates?taxYear=${taxYear}`),
+
+  documents: (orgId: string, entityId: string, kind?: string) =>
+    request<StoredDocument[]>(`/orgs/${orgId}/entities/${entityId}/documents${kind ? `?kind=${kind}` : ''}`),
+  uploadDocument: (orgId: string, entityId: string, file: File, kind: string, note?: string) => {
+    const form = new FormData();
+    form.append('file', file);
+    const query = `?kind=${encodeURIComponent(kind)}${note ? `&note=${encodeURIComponent(note)}` : ''}`;
+    return request<StoredDocument>(`/orgs/${orgId}/entities/${entityId}/documents${query}`, {
+      method: 'POST',
+      body: form,
+    });
+  },
+  linkDocument: (orgId: string, entityId: string, documentId: string, objectType: string, objectId: string) =>
+    request<StoredDocument>(`/orgs/${orgId}/entities/${entityId}/documents/${documentId}/links`, {
+      method: 'POST',
+      ...json({ objectType, objectId }),
+    }),
+  unlinkDocument: (orgId: string, entityId: string, documentId: string, objectType: string, objectId: string) =>
+    request<StoredDocument>(
+      `/orgs/${orgId}/entities/${entityId}/documents/${documentId}/links/${objectType}/${objectId}`,
+      { method: 'DELETE' },
+    ),
+  deleteDocument: (orgId: string, entityId: string, documentId: string) =>
+    request<void>(`/orgs/${orgId}/entities/${entityId}/documents/${documentId}`, { method: 'DELETE' }),
+  documentContentUrl: (orgId: string, entityId: string, documentId: string) =>
+    `/api/v1/orgs/${orgId}/entities/${entityId}/documents/${documentId}/content`,
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),

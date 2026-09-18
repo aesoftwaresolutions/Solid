@@ -4,10 +4,13 @@ import { Loading } from './components';
 import AccountsPage from './pages/AccountsPage';
 import BankPage from './pages/BankPage';
 import DashboardPage from './pages/DashboardPage';
+import DocumentsPage from './pages/DocumentsPage';
 import EntitiesPage from './pages/EntitiesPage';
 import LoginPage from './pages/LoginPage';
 import OrganizationsPage from './pages/OrganizationsPage';
+import PurchasesPage from './pages/PurchasesPage';
 import ReportsPage from './pages/ReportsPage';
+import SalesPage from './pages/SalesPage';
 
 function EntityNav() {
   const { orgId, entityId } = useParams();
@@ -20,6 +23,9 @@ function EntityNav() {
       <Link to={base}>Dashboard</Link>
       <Link to={`${base}/accounts`}>Accounts</Link>
       <Link to={`${base}/bank`}>Bank</Link>
+      <Link to={`${base}/sales`}>Sales</Link>
+      <Link to={`${base}/purchases`}>Purchases</Link>
+      <Link to={`${base}/documents`}>Documents</Link>
       <Link to={`${base}/reports`}>Reports</Link>
     </>
   );
@@ -50,6 +56,9 @@ function Shell() {
         <Route path="/orgs/:orgId/entities/:entityId" element={<DashboardPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/accounts" element={<AccountsPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/bank" element={<BankPage />} />
+        <Route path="/orgs/:orgId/entities/:entityId/sales" element={<SalesPage />} />
+        <Route path="/orgs/:orgId/entities/:entityId/purchases" element={<PurchasesPage />} />
+        <Route path="/orgs/:orgId/entities/:entityId/documents" element={<DocumentsPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/reports" element={<ReportsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
