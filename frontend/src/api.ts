@@ -348,6 +348,25 @@ export interface AuditEvent {
   details: Record<string, unknown>;
 }
 
+export interface RecurringEntry {
+  id: string;
+  name: string;
+  memo: string | null;
+  frequency: string;
+  startDate: string;
+  endDate: string | null;
+  dayOfMonth: number;
+  active: boolean;
+  nextDate: string | null;
+  lines: { lineNo: number; accountId: string; amount: Money; memo: string | null }[];
+}
+
+export interface RecurringRunResult {
+  through: string;
+  posted: { occurrenceDate: string; journalEntryId: string }[];
+  skipped: { occurrenceDate: string; reason: string }[];
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -607,6 +626,31 @@ export const api = {
     request<Member>(`/orgs/${orgId}/members`, { method: 'POST', ...json({ email, role }) }),
   auditEvents: (orgId: string, limit: number) =>
     request<AuditEvent[]>(`/orgs/${orgId}/audit-events?limit=${limit}`),
+
+  recurringEntries: (orgId: string, entityId: string) =>
+    request<RecurringEntry[]>(`/orgs/${orgId}/entities/${entityId}/recurring-entries`),
+  createRecurringEntry: (
+    orgId: string,
+    entityId: string,
+    body: {
+      name: string;
+      memo?: string;
+      frequency: string;
+      startDate: string;
+      dayOfMonth?: number;
+      lines: { accountId: string; amount: Money; memo?: string }[];
+    },
+  ) => request<RecurringEntry>(`/orgs/${orgId}/entities/${entityId}/recurring-entries`, { method: 'POST', ...json(body) }),
+  deactivateRecurringEntry: (orgId: string, entityId: string, recurringId: string) =>
+    request<RecurringEntry>(`/orgs/${orgId}/entities/${entityId}/recurring-entries/${recurringId}/deactivate`, {
+      method: 'POST',
+      ...json({}),
+    }),
+  runRecurringEntries: (orgId: string, entityId: string, through: string) =>
+    request<RecurringRunResult>(`/orgs/${orgId}/entities/${entityId}/recurring-entries/run`, {
+      method: 'POST',
+      ...json({ through }),
+    }),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),

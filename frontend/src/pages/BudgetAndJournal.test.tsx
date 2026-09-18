@@ -118,6 +118,7 @@ describe('spec 020 AC 4-7: journal page', () => {
     const { calls } = mockApi({
       [`GET ${base}/accounts`]: accounts,
       [`GET ${base}/journal-entries`]: () => entries,
+      [`GET ${base}/recurring-entries`]: [],
       [`GET ${base}/period-lock`]: { lockedThrough: null },
       [`POST ${base}/journal-entries`]: () => {
         entries = [draft];
@@ -157,6 +158,7 @@ describe('spec 020 AC 4-7: journal page', () => {
     const { calls } = mockApi({
       [`GET ${base}/accounts`]: accounts,
       [`GET ${base}/journal-entries`]: [posted],
+      [`GET ${base}/recurring-entries`]: [],
       [`GET ${base}/period-lock`]: { lockedThrough: '2026-09-30' },
       [`POST ${base}/journal-entries/j2/reverse`]: { ...posted, id: 'j3', reversesEntryId: 'j2' },
     });
@@ -176,7 +178,8 @@ describe('spec 020 AC 4-7: journal page', () => {
       {
         [`GET ${base}/accounts`]: accounts,
         [`GET ${base}/journal-entries`]: [],
-        [`GET ${base}/period-lock`]: { lockedThrough: '2026-12-31' },
+        [`GET ${base}/recurring-entries`]: [],
+      [`GET ${base}/period-lock`]: { lockedThrough: '2026-12-31' },
         [`POST ${base}/journal-entries`]: { detail: 'The period through 2026-12-31 is closed', code: 'PERIOD_LOCKED', status: 409 },
       },
       { status: { [`POST ${base}/journal-entries`]: 409 } },
@@ -192,5 +195,44 @@ describe('spec 020 AC 4-7: journal page', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('The period through 2026-12-31 is closed');
     expect(alert).toHaveTextContent('PERIOD_LOCKED');
+  });
+});
+
+describe('spec 026: recurring entries on the journal page', () => {
+  const template = {
+    id: 'r1', name: 'Rent', memo: null, frequency: 'monthly', startDate: '2026-01-15', endDate: null,
+    dayOfMonth: 15, active: true, nextDate: '2026-04-15',
+    lines: [
+      { lineNo: 1, accountId: 'a-6100', amount: money('1200.00'), memo: null },
+      { lineNo: 2, accountId: 'a-1010', amount: money('-1200.00'), memo: null },
+    ],
+  };
+
+  test('lists templates, runs them and reports what was skipped', async () => {
+    const user = userEvent.setup();
+    const { calls } = mockApi({
+      [`GET ${base}/accounts`]: accounts,
+      [`GET ${base}/journal-entries`]: [],
+      [`GET ${base}/period-lock`]: { lockedThrough: null },
+      [`GET ${base}/recurring-entries`]: [template],
+      [`POST ${base}/recurring-entries/run`]: {
+        through: '2026-04-30',
+        posted: [{ occurrenceDate: '2026-03-15', journalEntryId: 'j9' }],
+        skipped: [{ occurrenceDate: '2026-01-15', reason: 'Books are locked through 2026-02-28' }],
+      },
+      [`POST ${base}/recurring-entries/r1/deactivate`]: { ...template, active: false, nextDate: null },
+    });
+
+    renderAt('/orgs/o1/entities/e1/journal', '/orgs/:orgId/entities/:entityId/journal', <JournalPage />);
+
+    expect(await screen.findByText('Rent')).toBeInTheDocument();
+    expect(screen.getByText('2026-04-15')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Run now' }));
+    expect(await screen.findByText(/Posted 1; skipped 1 \(Books are locked through 2026-02-28\)/)).toBeInTheDocument();
+    expect(calls.some((c) => c.key === `POST ${base}/recurring-entries/run`)).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: 'Stop' }));
+    await waitFor(() => expect(calls.some((c) => c.key === `POST ${base}/recurring-entries/r1/deactivate`)).toBe(true));
   });
 });

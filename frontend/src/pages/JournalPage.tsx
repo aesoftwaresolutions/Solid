@@ -45,6 +45,7 @@ export default function JournalPage() {
   const accounts = useLoader(() => api.accounts(orgId, entityId), [orgId, entityId]);
   const entries = useLoader(() => api.journalEntries(orgId, entityId, from, to), [orgId, entityId, from, to]);
   const lock = useLoader(() => api.periodLock(orgId, entityId), [orgId, entityId]);
+  const recurring = useLoader(() => api.recurringEntries(orgId, entityId), [orgId, entityId]);
 
   const [entryDate, setEntryDate] = useState(today());
   const [memo, setMemo] = useState('');
@@ -52,6 +53,8 @@ export default function JournalPage() {
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
   const [lockThrough, setLockThrough] = useState('');
+  const [runThrough, setRunThrough] = useState(today());
+  const [runSummary, setRunSummary] = useState<string | null>(null);
 
   const postable = useMemo(
     () => (accounts.value ?? []).filter((a: Account) => !a.isHeader && !a.isArchived),
@@ -133,6 +136,83 @@ export default function JournalPage() {
         >
           Close the books
         </button>
+      </Card>
+
+      <Card title="Recurring entries">
+        <ErrorMessage error={recurring.error} />
+        <p className="muted">
+          Templates post only when you run them — nothing is posted on a timer. Running the same range twice is
+          harmless: an occurrence is posted once.
+        </p>
+        {recurring.value && recurring.value.length === 0 && <p className="muted">No recurring entries yet.</p>}
+        {recurring.value && recurring.value.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Every</th>
+                <th>Next</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {recurring.value.map((template) => (
+                <tr key={template.id}>
+                  <td>{template.name}</td>
+                  <td>{template.frequency}</td>
+                  <td>{template.active ? (template.nextDate ?? 'finished') : 'stopped'}</td>
+                  <td>
+                    {template.active && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => {
+                          setBusy(true);
+                          setError(undefined);
+                          api
+                            .deactivateRecurringEntry(orgId, entityId, template.id)
+                            .then(() => recurring.reload())
+                            .catch(setError)
+                            .finally(() => setBusy(false));
+                        }}
+                      >
+                        Stop
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <label>
+          Post everything due through
+          <input type="date" value={runThrough} onChange={(e) => setRunThrough(e.target.value)} />
+        </label>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setError(undefined);
+            api
+              .runRecurringEntries(orgId, entityId, runThrough)
+              .then((result) => {
+                setRunSummary(
+                  `Posted ${result.posted.length}; skipped ${result.skipped.length}` +
+                    (result.skipped.length > 0 ? ` (${result.skipped[0].reason})` : '.'),
+                );
+                entries.reload();
+                recurring.reload();
+              })
+              .catch(setError)
+              .finally(() => setBusy(false));
+          }}
+        >
+          Run now
+        </button>
+        {runSummary && <p className="notice">{runSummary}</p>}
       </Card>
 
       <Card title="New entry">
