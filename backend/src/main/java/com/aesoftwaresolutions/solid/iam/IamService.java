@@ -264,10 +264,11 @@ public class IamService {
                 from iam.user_account u
                 where s.token_hash = :hash and u.id = s.user_id
                   and s.revoked_at is null and s.expires_at > :now and s.last_seen_at > :idle
-                returning s.id, s.user_id, u.email, s.mfa_verified""")
+                returning s.id, s.user_id, u.email, s.mfa_verified, u.is_instance_admin""")
                 .param("now", nowTs).param("hash", SessionTokens.hash(token)).param("idle", idleCutoff)
                 .query((rs, n) -> new SolidPrincipal(rs.getObject("user_id", UUID.class), rs.getObject("id", UUID.class),
-                        rs.getString("email"), rs.getBoolean("mfa_verified"), bearer))
+                        rs.getString("email"), rs.getBoolean("mfa_verified"), bearer,
+                        rs.getBoolean("is_instance_admin")))
                 .optional();
     }
 

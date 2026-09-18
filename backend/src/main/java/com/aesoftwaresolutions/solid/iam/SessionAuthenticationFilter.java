@@ -7,6 +7,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -35,9 +36,13 @@ class SessionAuthenticationFilter extends OncePerRequestFilter {
         try {
             Optional<SolidPrincipal> principal = resolve(request);
             principal.ifPresent(p -> {
-                String authority = p.mfaVerified() ? "USER" : "MFA_PENDING";
+                List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+                authorities.add(new SimpleGrantedAuthority(p.mfaVerified() ? "USER" : "MFA_PENDING"));
+                if (p.mfaVerified() && p.instanceAdmin()) {
+                    authorities.add(new SimpleGrantedAuthority("INSTANCE_ADMIN"));
+                }
                 SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-                        p, null, List.of(new SimpleGrantedAuthority(authority))));
+                        p, null, authorities));
                 RequestContext.set(new RequestContext.Caller(p.userId(), ClientIp.of(request)));
             });
             chain.doFilter(request, response);

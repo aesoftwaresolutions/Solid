@@ -28,7 +28,8 @@ class RowLevelSecurityTests {
             "iam.session",           // identity spans organizations
             "iam.mfa_recovery_code", // identity spans organizations
             "iam.membership",        // needed to decide org access before an org scope exists
-            "audit.event"            // instance-wide chain; app role has INSERT/SELECT only, filtered by org in queries
+            "audit.event",           // instance-wide chain; app role has INSERT/SELECT only, filtered by org in queries
+            "sys.instance"           // one row describing the installation itself; holds no customer data (spec 018)
     );
 
     @Autowired
