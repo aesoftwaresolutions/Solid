@@ -164,3 +164,48 @@ describe('spec 022 AC 4-7: bulk save and receipts', () => {
     expect(await screen.findByLabelText('Category for ADOBE *CREATIVE CLD')).toHaveValue('a-6010');
   });
 });
+
+describe('spec 030: category suggestion from the local model', () => {
+  test('fills the row with the suggested account and says which model said so', async () => {
+    const user = userEvent.setup();
+    mockApi({
+      [`GET ${base}/accounts`]: accounts,
+      [`GET ${base}/bank-accounts`]: bankAccounts,
+      [`GET ${base}/bank-transactions`]: [txn('t1', 'SQ *BLUE BOTTLE')],
+      [`GET ${base}/documents`]: [],
+      [`GET ${base}/categorization-rules`]: [],
+      [`POST ${base}/bank-transactions/t1/suggest`]: {
+        accountId: 'a-6010', code: '6010', name: 'Advertising', source: 'ai', model: 'llama3.2', reason: null,
+      },
+    });
+
+    renderBank();
+    await user.click(await screen.findByRole('button', { name: 'Ask the model' }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Category for SQ *BLUE BOTTLE')).toHaveValue('a-6010'),
+    );
+    expect(screen.getByText(/llama3.2 suggests 6010 Advertising — check it before saving/)).toBeInTheDocument();
+  });
+
+  test('says why when there is no suggestion and changes nothing', async () => {
+    const user = userEvent.setup();
+    mockApi({
+      [`GET ${base}/accounts`]: accounts,
+      [`GET ${base}/bank-accounts`]: bankAccounts,
+      [`GET ${base}/bank-transactions`]: [txn('t1', 'SQ *BLUE BOTTLE')],
+      [`GET ${base}/documents`]: [],
+      [`GET ${base}/categorization-rules`]: [],
+      [`POST ${base}/bank-transactions/t1/suggest`]: {
+        accountId: null, code: null, name: null, source: null, model: null,
+        reason: 'Category suggestions are turned off on this server (solid.ai.enabled).',
+      },
+    });
+
+    renderBank();
+    await user.click(await screen.findByRole('button', { name: 'Ask the model' }));
+
+    expect(await screen.findByText(/turned off on this server/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Category for SQ *BLUE BOTTLE')).toHaveValue('');
+  });
+});

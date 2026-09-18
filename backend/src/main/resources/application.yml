@@ -36,6 +36,14 @@ solid:
     # 32 random bytes, base64. Generate with: openssl rand -base64 32
     # Back it up separately from the database: without it, encrypted fields can't be read.
     master-key: ${SOLID_MASTER_KEY}
+  ai:
+    # Optional help from a model running on this same server (Ollama). Off by default; Solid installs nothing.
+    # Only a transaction's description, its amount and this entity's account codes are sent, and the answer can
+    # only pick from those accounts. No tax figure ever comes from a model.
+    enabled: ${SOLID_AI_ENABLED:false}
+    base-url: ${SOLID_AI_BASE_URL:http://localhost:11434}
+    model: ${SOLID_AI_MODEL:llama3.2}
+    timeout-seconds: ${SOLID_AI_TIMEOUT_SECONDS:8}
   documents:
     # Where uploaded files are stored (encrypted). In Docker this is a volume.
     root: ${SOLID_DOCUMENTS_ROOT:./data/documents}

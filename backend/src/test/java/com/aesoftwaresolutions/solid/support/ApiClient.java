@@ -72,6 +72,26 @@ public class ApiClient {
         return this;
     }
 
+    /** Multipart upload of one file, for the import and document endpoints. */
+    public JsonNode postFile(String path, String filename, byte[] content, HttpStatus expected) {
+        org.springframework.util.MultiValueMap<String, Object> form = new org.springframework.util.LinkedMultiValueMap<>();
+        form.add("file", new org.springframework.core.io.ByteArrayResource(content) {
+            @Override
+            public String getFilename() {
+                return filename;
+            }
+        });
+        HttpHeaders headers = new HttpHeaders();
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+        headers.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+        ResponseEntity<JsonNode> response = http.exchange(path, HttpMethod.POST, new HttpEntity<>(form, headers),
+                JsonNode.class);
+        assertThat(response.getStatusCode()).as("POST " + path + " -> " + response.getBody()).isEqualTo(expected);
+        return response.getBody();
+    }
+
     public JsonNode post(String path, Object body, HttpStatus expected) {
         return exchange(HttpMethod.POST, path, body, expected);
     }

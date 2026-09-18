@@ -251,6 +251,31 @@ export default function BankPage() {
                       ))}
                     </select>
                     {txn.suggestionSource && <div className="muted">suggested from {txn.suggestionSource}</div>}
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={busy}
+                      onClick={() => {
+                        setBusy(true);
+                        setActionError(undefined);
+                        api
+                          .suggestCategory(orgId, entityId, txn.id)
+                          .then((suggestion) => {
+                            if (suggestion.accountId) {
+                              setChosen({ ...chosen, [txn.id]: suggestion.accountId });
+                              setConfirmation(
+                                `${suggestion.model} suggests ${suggestion.code} ${suggestion.name} — check it before saving.`,
+                              );
+                            } else {
+                              setConfirmation(suggestion.reason ?? 'No suggestion.');
+                            }
+                          })
+                          .catch(setActionError)
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      Ask the model
+                    </button>
                   </td>
                   <td>
                     {attachedTo(txn.id).map((document) => (

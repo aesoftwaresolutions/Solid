@@ -165,6 +165,12 @@ public class BankService {
                 where a.entity_id = ? and t.status = 'new'""").param(entityId).query(Integer.class).single());
     }
 
+    /** One transaction, for screens and other modules (the suggestion endpoint, for example). */
+    public BankModels.BankTransaction getTransaction(UUID orgId, UUID entityId, UUID txnId) {
+        orgs.getEntity(orgId, entityId);
+        return orgScope.call(orgId, () -> findTxn(entityId, txnId));
+    }
+
     public BankModels.BankTransaction categorize(UUID orgId, UUID entityId, UUID txnId, UUID accountId, String memo) {
         orgs.getEntity(orgId, entityId);
         return orgScope.call(orgId, () -> categorizeInScope(orgId, entityId, txnId, accountId, memo));

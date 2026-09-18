@@ -388,6 +388,15 @@ export interface RulePack {
   todos: string[];
 }
 
+export interface CategorySuggestion {
+  accountId: string | null;
+  code: string | null;
+  name: string | null;
+  source: string | null;
+  model: string | null;
+  reason: string | null;
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -683,6 +692,12 @@ export const api = {
     entityId: string,
     body: { asOfDate: string; equityAccountId?: string; balances: { accountId: string; amount: Money }[] },
   ) => request<JournalEntry>(`/orgs/${orgId}/entities/${entityId}/opening-balances`, { method: 'POST', ...json(body) }),
+
+  suggestCategory: (orgId: string, entityId: string, txnId: string) =>
+    request<CategorySuggestion>(`/orgs/${orgId}/entities/${entityId}/bank-transactions/${txnId}/suggest`, {
+      method: 'POST',
+      ...json({}),
+    }),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),
