@@ -1,0 +1,11 @@
+{
+  "deduction": "Home office — simplified method",
+  "source": "Simplified option for the business use of a home (Rev. Proc. 2013-13, described in IRS Publication 587): a flat rate per square foot of qualified office space, capped at a maximum square footage. VERIFY the current rate and cap in the latest Publication 587 before filing; this file is not automatically updated.",
+  "ratePerSquareFoot": "5.00",
+  "maximumSquareFeet": 300,
+  "appliesFromTaxYear": 2013,
+  "todo": [
+    "Confirm the rate and cap for each filing year; add a per-year table if the IRS changes them.",
+    "Actual-expense method (mortgage interest, insurance, utilities, depreciation allocation) needs the tax rule pack and a Form 8829 implementation."
+  ]
+}

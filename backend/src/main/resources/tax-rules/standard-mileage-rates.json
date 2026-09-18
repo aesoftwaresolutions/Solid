@@ -1,0 +1,14 @@
+{
+  "deduction": "Standard mileage rate (business use of a car)",
+  "unit": "US dollars per mile",
+  "source": "IRS annual standard mileage rate announcements (Notice series) as reflected in IRS Publication 463. VERIFY each year's rate against the IRS notice before filing. Years the IRS has not yet announced are deliberately absent so Solid reports miles without guessing a rate. Split-year rates (e.g. 2022) are listed with their period.",
+  "rates": [
+    { "taxYear": 2023, "ratePerMile": "0.655" },
+    { "taxYear": 2024, "ratePerMile": "0.67" },
+    { "taxYear": 2025, "ratePerMile": "0.70" }
+  ],
+  "todo": [
+    "2026 and later: rate not yet on file — add it once the IRS announces it (and re-verify 2023-2025 against the notices).",
+    "Support mid-year rate changes (as in 2022) if a future year splits again."
+  ]
+}
