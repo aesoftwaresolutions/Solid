@@ -367,6 +367,27 @@ export interface RecurringRunResult {
   skipped: { occurrenceDate: string; reason: string }[];
 }
 
+export interface BackupStatus {
+  instanceId: string;
+  keyFingerprint: string;
+  schemaVersion: string;
+  appVersion: string;
+  databaseBytes: number;
+  tableEstimates: Record<string, number>;
+  documents: { count: number; bytes: number };
+  documentsRoot: string;
+  checkedAt: string;
+}
+
+export interface RulePack {
+  id: string;
+  title: string;
+  source: string;
+  taxYears: number[];
+  appliesFromTaxYear: number | null;
+  todos: string[];
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -651,6 +672,9 @@ export const api = {
       method: 'POST',
       ...json({ through }),
     }),
+
+  backupStatus: () => request<BackupStatus>('/system/backup-status'),
+  taxRulePacks: () => request<RulePack[]>('/tax/rule-packs'),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),

@@ -27,6 +27,9 @@ export default function OrganizationsPage() {
   return (
     <main>
       <h1>Organizations</h1>
+      <p>
+        <Link to="/instance">This installation</Link>
+      </p>
       <ErrorMessage error={error} />
       {!organizations && !error && <Loading what="organizations" />}
 

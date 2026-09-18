@@ -7,6 +7,7 @@ import BudgetPage from './pages/BudgetPage';
 import DashboardPage from './pages/DashboardPage';
 import DocumentsPage from './pages/DocumentsPage';
 import EntitiesPage from './pages/EntitiesPage';
+import InstancePage from './pages/InstancePage';
 import JournalPage from './pages/JournalPage';
 import LoginPage from './pages/LoginPage';
 import OrganizationPage from './pages/OrganizationPage';
@@ -57,6 +58,7 @@ function Shell() {
       </nav>
       <Routes>
         <Route path="/" element={<OrganizationsPage />} />
+        <Route path="/instance" element={<InstancePage />} />
         <Route path="/orgs/:orgId" element={<EntitiesPage />} />
         <Route path="/orgs/:orgId/settings" element={<OrganizationPage />} />
         <Route path="/orgs/:orgId/entities/:entityId" element={<DashboardPage />} />

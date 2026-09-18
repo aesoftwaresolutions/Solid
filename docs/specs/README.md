@@ -30,5 +30,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 024 | Dashboard that says what to do next | [024](024-dashboard.md) | Done (owner review) | 010, 012, 013, 019, 021 |
 | 025 | People and activity | [025](025-people-and-activity.md) | Done (owner + security review) | 007 |
 | 026 | Recurring journal entries | [026](026-recurring-entries.md) | Done (owner review) | 005, 020 |
+| 027 | Instance admin area | [027](027-instance-admin.md) | Done (owner review) | 018, 021 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done
