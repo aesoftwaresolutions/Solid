@@ -24,5 +24,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 018 | Backups, restore and instance identity | [018](018-backups-and-instance-identity.md) | Done (owner + security review) | 007, 016 |
 | 019 | Personal accounts and monthly budgets | [019](019-personal-budgets.md) | Done (owner review) | 004, 006 |
 | 020 | Budget and journal screens | [020](020-web-ui-budget-and-journal.md) | Done (owner review) | 011, 019 |
+| 021 | Tax rule pack registry and coverage | [021](021-tax-rule-pack-registry.md) | Done (owner + CPA review) | 004 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done
