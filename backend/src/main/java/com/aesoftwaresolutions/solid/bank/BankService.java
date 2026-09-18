@@ -158,6 +158,13 @@ public class BankService {
                 .query(this::mapTxn).list());
     }
 
+    /** How many imported transactions still need a category (used by the tax-line readiness check). */
+    public int countUncategorized(UUID orgId, UUID entityId) {
+        return orgScope.call(orgId, () -> db.sql("""
+                select count(*) from bank.bank_txn t join bank.bank_account a on a.id = t.bank_account_id
+                where a.entity_id = ? and t.status = 'new'""").param(entityId).query(Integer.class).single());
+    }
+
     public BankModels.BankTransaction categorize(UUID orgId, UUID entityId, UUID txnId, UUID accountId, String memo) {
         orgs.getEntity(orgId, entityId);
         return orgScope.call(orgId, () -> categorizeInScope(orgId, entityId, txnId, accountId, memo));

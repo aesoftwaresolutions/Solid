@@ -13,9 +13,25 @@ import org.springframework.web.bind.annotation.RestController;
 class ReportController {
 
     private final ReportService reports;
+    private final TaxLineReportService taxLines;
 
-    ReportController(ReportService reports) {
+    ReportController(ReportService reports, TaxLineReportService taxLines) {
         this.reports = reports;
+        this.taxLines = taxLines;
+    }
+
+    @GetMapping("/tax-lines")
+    TaxLineReport taxLines(@PathVariable UUID orgId, @PathVariable UUID entityId, @RequestParam int taxYear) {
+        return taxLines.report(orgId, entityId, taxYear);
+    }
+
+    @GetMapping(path = "/tax-lines.csv", produces = "text/csv")
+    org.springframework.http.ResponseEntity<String> taxLinesCsv(@PathVariable UUID orgId, @PathVariable UUID entityId,
+                                                                @RequestParam int taxYear) {
+        TaxLineReport report = taxLines.report(orgId, entityId, taxYear);
+        return org.springframework.http.ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=\"solid-tax-lines-" + taxYear + ".csv\"")
+                .body(taxLines.csv(report));
     }
 
     @GetMapping("/trial-balance")
