@@ -251,6 +251,67 @@ export interface StoredDocument {
   links: DocumentLink[];
 }
 
+export interface BudgetLine {
+  accountId: string;
+  code: string;
+  name: string;
+  type: string;
+  amount: Money;
+}
+
+export interface Budget {
+  id: string;
+  periodMonth: string;
+  currency: string;
+  lines: BudgetLine[];
+  budgetedIncome: Money;
+  budgetedExpenses: Money;
+  budgetedNet: Money;
+}
+
+export interface ComparisonRow {
+  accountId: string;
+  code: string;
+  name: string;
+  budget: Money;
+  actual: Money;
+  variance: Money;
+  overBudget: boolean;
+}
+
+export interface BudgetVsActual {
+  periodMonth: string;
+  currency: string;
+  income: ComparisonRow[];
+  expenses: ComparisonRow[];
+  totals: {
+    budgetedIncome: Money;
+    actualIncome: Money;
+    budgetedExpenses: Money;
+    actualExpenses: Money;
+    budgetedNet: Money;
+    actualNet: Money;
+  };
+}
+
+export interface JournalLine {
+  lineNo: number;
+  accountId: string;
+  amount: Money;
+  memo: string | null;
+}
+
+export interface JournalEntry {
+  id: string;
+  entryDate: string;
+  memo: string | null;
+  source: string;
+  status: 'draft' | 'posted';
+  reversesEntryId: string | null;
+  postingSeq: number | null;
+  lines: JournalLine[];
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -455,6 +516,37 @@ export const api = {
     request<void>(`/orgs/${orgId}/entities/${entityId}/documents/${documentId}`, { method: 'DELETE' }),
   documentContentUrl: (orgId: string, entityId: string, documentId: string) =>
     `/api/v1/orgs/${orgId}/entities/${entityId}/documents/${documentId}/content`,
+
+  budget: (orgId: string, entityId: string, month: string) =>
+    request<Budget>(`/orgs/${orgId}/entities/${entityId}/budgets/${month}`),
+  saveBudget: (orgId: string, entityId: string, month: string, lines: { accountId: string; amount: Money }[]) =>
+    request<Budget>(`/orgs/${orgId}/entities/${entityId}/budgets/${month}`, { method: 'PUT', ...json({ lines }) }),
+  budgetVsActual: (orgId: string, entityId: string, month: string) =>
+    request<BudgetVsActual>(`/orgs/${orgId}/entities/${entityId}/reports/budget-vs-actual?month=${month}`),
+
+  journalEntries: (orgId: string, entityId: string, from: string, to: string) =>
+    request<JournalEntry[]>(`/orgs/${orgId}/entities/${entityId}/journal-entries?from=${from}&to=${to}`),
+  createJournalEntry: (
+    orgId: string,
+    entityId: string,
+    body: { entryDate: string; memo?: string; post: boolean; lines: { accountId: string; amount: Money; memo?: string }[] },
+  ) => request<JournalEntry>(`/orgs/${orgId}/entities/${entityId}/journal-entries`, { method: 'POST', ...json(body) }),
+  postJournalEntry: (orgId: string, entityId: string, entryId: string) =>
+    request<JournalEntry>(`/orgs/${orgId}/entities/${entityId}/journal-entries/${entryId}/post`, { method: 'POST' }),
+  reverseJournalEntry: (orgId: string, entityId: string, entryId: string) =>
+    request<JournalEntry>(`/orgs/${orgId}/entities/${entityId}/journal-entries/${entryId}/reverse`, {
+      method: 'POST',
+      ...json({}),
+    }),
+  deleteJournalEntry: (orgId: string, entityId: string, entryId: string) =>
+    request<void>(`/orgs/${orgId}/entities/${entityId}/journal-entries/${entryId}`, { method: 'DELETE' }),
+  periodLock: (orgId: string, entityId: string) =>
+    request<{ lockedThrough: string | null }>(`/orgs/${orgId}/entities/${entityId}/period-lock`),
+  setPeriodLock: (orgId: string, entityId: string, lockedThrough: string) =>
+    request<{ lockedThrough: string | null }>(`/orgs/${orgId}/entities/${entityId}/period-lock`, {
+      method: 'PUT',
+      ...json({ lockedThrough }),
+    }),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),

@@ -3,9 +3,11 @@ import { useAuth } from './auth';
 import { Loading } from './components';
 import AccountsPage from './pages/AccountsPage';
 import BankPage from './pages/BankPage';
+import BudgetPage from './pages/BudgetPage';
 import DashboardPage from './pages/DashboardPage';
 import DocumentsPage from './pages/DocumentsPage';
 import EntitiesPage from './pages/EntitiesPage';
+import JournalPage from './pages/JournalPage';
 import LoginPage from './pages/LoginPage';
 import OrganizationsPage from './pages/OrganizationsPage';
 import PurchasesPage from './pages/PurchasesPage';
@@ -23,9 +25,11 @@ function EntityNav() {
       <Link to={base}>Dashboard</Link>
       <Link to={`${base}/accounts`}>Accounts</Link>
       <Link to={`${base}/bank`}>Bank</Link>
+      <Link to={`${base}/journal`}>Journal</Link>
       <Link to={`${base}/sales`}>Sales</Link>
       <Link to={`${base}/purchases`}>Purchases</Link>
       <Link to={`${base}/documents`}>Documents</Link>
+      <Link to={`${base}/budget`}>Budget</Link>
       <Link to={`${base}/reports`}>Reports</Link>
     </>
   );
@@ -56,6 +60,8 @@ function Shell() {
         <Route path="/orgs/:orgId/entities/:entityId" element={<DashboardPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/accounts" element={<AccountsPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/bank" element={<BankPage />} />
+        <Route path="/orgs/:orgId/entities/:entityId/journal" element={<JournalPage />} />
+        <Route path="/orgs/:orgId/entities/:entityId/budget" element={<BudgetPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/sales" element={<SalesPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/purchases" element={<PurchasesPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/documents" element={<DocumentsPage />} />
