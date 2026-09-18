@@ -676,6 +676,14 @@ export const api = {
   backupStatus: () => request<BackupStatus>('/system/backup-status'),
   taxRulePacks: () => request<RulePack[]>('/tax/rule-packs'),
 
+  openingBalances: (orgId: string, entityId: string) =>
+    request<JournalEntry>(`/orgs/${orgId}/entities/${entityId}/opening-balances`),
+  createOpeningBalances: (
+    orgId: string,
+    entityId: string,
+    body: { asOfDate: string; equityAccountId?: string; balances: { accountId: string; amount: Money }[] },
+  ) => request<JournalEntry>(`/orgs/${orgId}/entities/${entityId}/opening-balances`, { method: 'POST', ...json(body) }),
+
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),
   balanceSheet: (orgId: string, entityId: string, asOf: string) =>
