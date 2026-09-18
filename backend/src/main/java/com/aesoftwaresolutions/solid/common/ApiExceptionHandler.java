@@ -21,6 +21,11 @@ class ApiExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, "Not found", e.getMessage());
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    ProblemDetail tooLarge(org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+        return problem(HttpStatus.BAD_REQUEST, "File too large", "File is too large (maximum 5 MB)");
+    }
+
     @ExceptionHandler(ForbiddenException.class)
     ProblemDetail forbidden(ForbiddenException e) {
         return problem(HttpStatus.FORBIDDEN, "Forbidden", e.getMessage());

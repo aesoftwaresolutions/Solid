@@ -10,6 +10,10 @@ spring:
       connection-init-sql: SET ROLE solid_app
   flyway:
     locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 7MB
 
 management:
   endpoints:

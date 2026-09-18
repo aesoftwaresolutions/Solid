@@ -48,6 +48,12 @@ public class JournalService {
         return create(orgId, entityId, entryDate, memo, post, lines, idempotencyKey, "manual", null, null);
     }
 
+    /** Creates a posted entry on behalf of another module (e.g. source "bank" with the bank transaction id). */
+    public JournalEntry postFromSource(UUID orgId, UUID entityId, LocalDate entryDate, String memo, List<NewLine> lines,
+                                       String source, UUID sourceRef) {
+        return create(orgId, entityId, entryDate, memo, true, lines, null, source, sourceRef, null).entry();
+    }
+
     CreateResult create(UUID orgId, UUID entityId, LocalDate entryDate, String memo, boolean post, List<NewLine> lines,
                         String idempotencyKey, String source, UUID sourceRef, UUID reversesEntryId) {
         LegalEntity entity = orgs.getEntity(orgId, entityId);
