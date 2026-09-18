@@ -66,6 +66,13 @@ Do this **before** you need it, once, and then once a year:
    one now, while the original instance is still running.
 4. Write down how long it took. That number is your real recovery time.
 
+## Taking the data out
+
+Backups are for restoring this server. If you want the books themselves in a form anything can read, sign in and
+use **Reports → Export everything**, or `GET /api/v1/orgs/{orgId}/entities/{entityId}/export.zip`. It is a ZIP of
+CSV files (accounts, journal, bank activity, invoices, bills and the document list) with a README explaining the
+columns. The uploaded files themselves are not in it — they come out of the backup above.
+
 ## Upgrades
 
 ```bash

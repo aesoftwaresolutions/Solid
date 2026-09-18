@@ -130,6 +130,20 @@ export default function ReportsPage() {
       </Card>
 
       <Card
+        title="Your data"
+        actions={
+          <a href={api.entityExportUrl(orgId, entityId)} download>
+            Export everything (ZIP)
+          </a>
+        }
+      >
+        <p className="muted">
+          Every account, journal entry, bank transaction, invoice, bill and document record as CSV files anyone can
+          open. The uploaded files themselves come out of a server backup — see docs/operations.md.
+        </p>
+      </Card>
+
+      <Card
         title={`Tax lines ${year}`}
         actions={
           <a href={api.taxLinesCsvUrl(orgId, entityId, year)} download>

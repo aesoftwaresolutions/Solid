@@ -579,6 +579,8 @@ export const api = {
     request<TrialBalance>(`/orgs/${orgId}/entities/${entityId}/reports/trial-balance?asOf=${asOf}`),
   taxLines: (orgId: string, entityId: string, taxYear: number) =>
     request<TaxLineReport>(`/orgs/${orgId}/entities/${entityId}/reports/tax-lines?taxYear=${taxYear}`),
+  entityExportUrl: (orgId: string, entityId: string) =>
+    `/api/v1/orgs/${orgId}/entities/${entityId}/export.zip`,
   taxLinesCsvUrl: (orgId: string, entityId: string, taxYear: number) =>
     `/api/v1/orgs/${orgId}/entities/${entityId}/reports/tax-lines.csv?taxYear=${taxYear}`,
 };
