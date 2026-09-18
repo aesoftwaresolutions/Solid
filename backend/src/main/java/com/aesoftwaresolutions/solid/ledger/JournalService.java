@@ -191,6 +191,27 @@ public class JournalService {
         return lockedThrough;
     }
 
+    /** One posted ledger line, for modules that work with individual lines (e.g. reconciliation). */
+    public record PostedLine(UUID lineId, UUID entryId, LocalDate entryDate, String memo, Money amount) {
+    }
+
+    /** Posted lines on one account, oldest first. Call inside an org scope or let this open one. */
+    public List<PostedLine> postedLinesForAccount(UUID orgId, UUID entityId, UUID accountId, LocalDate onOrBefore) {
+        orgs.getEntity(orgId, entityId);
+        return orgScope.call(orgId, () -> db.sql("""
+                select l.id as line_id, e.id as entry_id, e.entry_date, coalesce(l.memo, e.memo) as memo,
+                       l.amount_minor, l.currency
+                from gl.journal_line l join gl.journal_entry e on e.id = l.journal_entry_id
+                where e.entity_id = :entity and e.status = 'posted' and l.account_id = :account
+                  and (cast(:onOrBefore as date) is null or e.entry_date <= cast(:onOrBefore as date))
+                order by e.entry_date, e.posting_seq, l.line_no""")
+                .param("entity", entityId).param("account", accountId).param("onOrBefore", onOrBefore)
+                .query((rs, n) -> new PostedLine(rs.getObject("line_id", UUID.class), rs.getObject("entry_id", UUID.class),
+                        rs.getObject("entry_date", LocalDate.class), rs.getString("memo"),
+                        Money.ofMinor(rs.getLong("amount_minor"), rs.getString("currency"))))
+                .list());
+    }
+
     public ChainVerification verifyChain(UUID orgId, UUID entityId) {
         orgs.getEntity(orgId, entityId);
         return orgScope.call(orgId, () -> {

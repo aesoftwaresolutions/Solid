@@ -31,7 +31,7 @@ Status: `{id, statementDate, statementEndingBalance, beginningBalance, clearedBa
 4. Marking lines updates cleared balance and difference exactly (Money arithmetic). Lines from other accounts/entities/orgs or dated after the statement → 409 `INVALID_LINE`.
 5. Completing with difference ≠ 0 → 409 `NOT_BALANCED` (detail includes the difference). Completing with 0 sets status `completed`; its lines can't be cleared again by later reconciliations.
 6. A completed reconciliation can't be modified (409 `RECONCILIATION_COMPLETED`), only undone if it is the latest. Undo is audited.
-7. Golden scenario: import the September CSV fixture, categorize all six, reconcile at 2026-09-30 with statement balance 1,194.41 → difference 0 after clearing all lines; completing succeeds; October reconciliation starts with beginning balance 1,194.41.
+7. Golden scenario: import the September CSV fixture and categorize all six transactions. The checking account then holds 2,500.00 − 54.99 − 42.10 − 4.50 − 4.50 − 1,200.00 = **1,193.91**. Reconciling at 2026-09-30 with that statement balance gives difference 0 once every line is cleared; completing succeeds; the next reconciliation starts with beginning balance 1,193.91.
 8. RLS on both tables; viewers can read but not change.
 
 ## Out of scope

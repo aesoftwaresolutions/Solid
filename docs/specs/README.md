@@ -12,7 +12,7 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 006 | Trial balance, P&L, balance sheet | [006](006-financial-reports.md) | Done (owner review) | 005 |
 | 007 | Users, login, mandatory MFA, audit log | [007](007-auth-mfa-audit.md) | Done (owner + security review) | 003 |
 | 008 | CSV/OFX import → review queue → categorize | [008](008-bank-import-categorize.md) | Done (owner review) | 005 |
-| 009 | Bank reconciliation | — | Not started | 008 |
+| 009 | Bank reconciliation | [009](009-bank-reconciliation.md) | Done (owner review) | 008 |
 | 010 | Tax-line report for preparers | — | Not started | 006 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done
