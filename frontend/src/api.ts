@@ -320,6 +320,14 @@ export interface CategorizationRule {
   priority: number;
 }
 
+export interface TaxRuleCoverage {
+  taxYear: number;
+  packs: { id: string; title: string; covered: boolean; reason: string; source: string; todos: string[] }[];
+  covered: number;
+  missing: number;
+  note: string;
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -570,6 +578,9 @@ export const api = {
       method: 'POST',
       ...json({ items }),
     }),
+
+  taxRuleCoverage: (taxYear: number) =>
+    request<TaxRuleCoverage>(`/tax/rule-coverage?taxYear=${taxYear}`),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),

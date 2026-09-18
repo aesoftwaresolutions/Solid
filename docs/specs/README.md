@@ -27,5 +27,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 021 | Tax rule pack registry and coverage | [021](021-tax-rule-pack-registry.md) | Done (owner + CPA review) | 004 |
 | 022 | Bank rules and receipts in the review queue | [022](022-bank-rules-and-receipts.md) | Done (owner review) | 008, 016 |
 | 023 | Export everything (CSV bundle) | [023](023-data-export.md) | Done (owner review) | 005, 016 |
+| 024 | Dashboard that says what to do next | [024](024-dashboard.md) | Done (owner review) | 010, 012, 013, 019, 021 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done
