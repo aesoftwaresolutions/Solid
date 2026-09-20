@@ -1,21 +1,64 @@
 # Solid — Business & Personal Accounting + US Tax
 
-An all-in-one, **self-hosted** accounting and tax platform for small businesses, sole proprietors, and households, built by **AE Software Solutions**.
+An all-in-one, **self-hosted** accounting and tax platform for small businesses, sole proprietors, and households,
+built by **AE Software Solutions**.
 
-> **Status:** Research & planning (Phase 0). No production code yet.
-> **Disclaimer:** Tax figures in these docs are planning notes, not tax advice. Every tax rule must be verified against IRS/state primary sources before implementation.
+> **Status:** Phase 1 (Books) is built and tested. Tax *preparation* is not: Solid keeps the books, maps them to
+> tax lines and hands your preparer a clean report. Nothing here is tax advice.
 
-## Vision
+## What works today
 
-One system that handles the full money lifecycle for a person *and* the businesses they own:
+Sign in (with mandatory two-factor), create an organization and its entities, and:
 
-- **Books** — double-entry general ledger, bank feeds, reconciliation, invoicing, bills, receipts
-- **Personal finance** — household accounts, budgets, investments, W-2/1099 income tracking
-- **Tax** — year-round tax estimates, federal + state income tax prep (1040, Schedule C/E/SE, 1120-S, 1065), sales tax, 1099 issuing, quarterly estimates
-- **Filing** — PDF form output first; IRS MeF e-file and IRIS information-return e-file in a later phase
-- **Local AI** — transaction categorization and receipt extraction via Ollama, so taxpayer data never has to leave the client's server
+| Area | What you can do |
+|---|---|
+| **Books** | Chart of accounts from a template (Schedule C or household), manual journal entries, recurring entries, opening balances, period locks, immutable posting with a hash-chained audit trail |
+| **Bank** | Import CSV/OFX/QFX, review queue with rules and bulk categorizing, reconcile against a statement, attach the receipt to the transaction |
+| **Sales & purchases** | Customers, invoices (draft → issued → paid), invoice PDFs, statements, vendors, bills, payments, A/R and A/P aging, 1099-NEC candidate tracking |
+| **Assets & deductions** | Fixed assets with straight-line book depreciation and disposal, mileage log, home-office declaration |
+| **Personal** | Household chart of accounts, monthly budgets, budget vs actual |
+| **Documents** | An encrypted vault for receipts and paperwork, linked to the records they support |
+| **Reports** | Trial balance, P&L, balance sheet, tax-line report with a readiness check, year-end checklist, full CSV export |
+| **Operations** | Backups and a restore drill, a master-key guard that refuses to start against the wrong key, an instance page, a generated OpenAPI document |
+| **Local AI (optional, off)** | Category suggestions from a model running on your own server |
 
-## Key decisions so far
+Roughly 215 backend and 43 frontend tests cover the above; see `docs/specs/README.md` for the slice-by-slice
+history, each with its acceptance criteria.
+
+## Running it
+
+```bash
+cp .env.example .env          # then set SOLID_MASTER_KEY (openssl rand -base64 32)
+docker compose up --build     # http://localhost:8080
+```
+
+The first account created becomes the instance administrator. Read **[docs/operations.md](docs/operations.md)**
+before you put real books in it — especially the part about keeping `SOLID_MASTER_KEY` somewhere other than your
+backups, because without it the encrypted documents cannot be read, by anyone, ever.
+
+Developing:
+
+```bash
+cd backend && ./mvnw verify   # needs Docker (Testcontainers starts PostgreSQL 16)
+cd frontend && npm test
+```
+
+The API is documented at `/swagger-ui/index.html` on a running server; **[docs/api.md](docs/api.md)** shows how to
+script against it.
+
+## The rules this codebase keeps
+
+These are in `CLAUDE.md` and enforced by tests, not just good intentions:
+
+- **Money is never a float.** Integer minor units in the database, `Money` in Java, decimal strings in JSON.
+- **Tax figures are never invented.** Every rate, limit and threshold lives in a data file with its source, and a
+  year with no published figure is reported as unknown rather than guessed (`/api/v1/tax/rule-coverage`).
+- **Posted entries are immutable.** Corrections are reversing entries, enforced by database triggers.
+- **Every organization's data is isolated** by PostgreSQL row-level security, with a test that fails if a new
+  table forgets its policy.
+- **Nothing is posted on a timer** and no figure ever comes from a language model.
+
+## Key decisions
 
 | Topic | Decision | Doc |
 |---|---|---|
@@ -23,7 +66,7 @@ One system that handles the full money lifecycle for a person *and* the business
 | Jurisdictions | US federal + all states; architecture ready for other countries | [Requirements](docs/design/01-requirements.md) |
 | Stack | Java 21 + Spring Boot, PostgreSQL, React + TypeScript | [ADR-0002](docs/adr/0002-tech-stack.md) |
 | Ledger | Immutable double-entry journal, integer minor units | [ADR-0003](docs/adr/0003-ledger-model.md) |
-| Tax rules | Declarative, versioned tax-year rule packs (inspired by IRS Direct File's Fact Graph) | [ADR-0004](docs/adr/0004-tax-rules-engine.md) |
+| Tax rules | Declarative, versioned tax-year rule packs | [ADR-0004](docs/adr/0004-tax-rules-engine.md) |
 | E-file | Phase 2+, transmitted centrally through the Services Hub | [ADR-0005](docs/adr/0005-efile-via-hub.md) |
 | AI | Local-first (Ollama); cloud LLMs opt-in with §7216 consent | [ADR-0006](docs/adr/0006-ai-local-first.md) |
 
@@ -31,24 +74,20 @@ One system that handles the full money lifecycle for a person *and* the business
 
 ```
 docs/
-  research/
-    market-analysis.md        Competitors, pricing, gaps
-    tax-landscape-2026.md     OBBBA changes, FIRE→IRIS, Direct File shutdown
-    regulatory-compliance.md  IRS e-file, FTC Safeguards, §7216, Pub 4557
-    technology-options.md     Open-source ledgers, tax engines, bank feeds, sales tax APIs
-  design/
-    01-requirements.md        Functional / non-functional requirements
-    02-architecture.md        Components, deployment, data flow
-    03-data-model.md          Core schema (ledger, entities, tax)
-    04-api-design.md          REST API conventions & key endpoints
-    05-tax-engine.md          Rules engine deep dive
-    06-security.md            Security architecture & compliance mapping
-    07-roadmap.md             Phased plan & milestones
-    08-open-questions.md      Decisions still needed
-  adr/                        Architecture Decision Records
-SOURCES.md                    All research sources
+  research/     Market, tax landscape, regulation, technology options
+  design/       Requirements, architecture, data model, API, tax engine, security, roadmap
+  adr/          The decisions above, with their reasoning
+  specs/        One spec per slice, with acceptance criteria and status (start here)
+  operations.md Backups, restore drill, upgrades
+  api.md        Using the API from a script
+backend/        Java 21, Spring Boot 3, Spring Modulith, Flyway, PostgreSQL 16
+frontend/       React 19 + TypeScript + Vite
+ops/            backup.sh, restore.sh
 ```
 
-## Next steps
+## What is deliberately not here yet
 
-See [Roadmap](docs/design/07-roadmap.md) and [Open Questions](docs/design/08-open-questions.md).
+Tax **calculation** and filing: projections, 1040 and its schedules, state returns, e-file, and sales tax. Those
+need reviewed rule packs and, for filing, IRS registration — the roadmap in
+[docs/design/07-roadmap.md](docs/design/07-roadmap.md) lays out the order. Until then Solid's honest claim is that
+it keeps good books and hands your preparer a clean, sourced report.

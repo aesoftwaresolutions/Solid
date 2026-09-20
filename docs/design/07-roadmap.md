@@ -8,19 +8,22 @@ Dates assume 1–2 developers and are rough. Tax season dates are fixed and driv
 - [ ] Validate with 5–10 target customers (sole props + one small firm)
 - [ ] Engage a CPA/EA advisor for rule-pack review
 - [ ] Talk to an attorney: §7216 consent, ToS, privacy policy, licensing
-- [ ] Skeleton repo: Spring Boot + React + Postgres + Docker Compose, CI, license scan
-- [ ] Coding standards, money type, error format, OpenAPI pipeline
+- [x] Skeleton repo: Spring Boot + React + Postgres + Docker Compose, CI, license scan
+- [x] Coding standards, money type, error format, OpenAPI pipeline
 
 ## Phase 1 — Books MVP (Dec 2026–Apr 2027)
 Goal: a sole proprietor can run their business books on Solid.
-- Identity (MFA), orgs/entities, RBAC, audit log
-- Chart of accounts templates mapped to Schedule C lines
-- Journal, period locks, P&L, balance sheet, trial balance
-- OFX/QFX/CSV import, review queue, rules, reconciliation
-- Invoices & bills (basic), receipts vault
-- Installer + backups + upgrades on Hostinger VPS
-- **Tax-line report** ("hand this to your preparer") for TY2026 filing season
-- Pilot with 3–5 friendly customers
+- [x] Identity (MFA), orgs/entities, RBAC, audit log
+- [x] Chart of accounts templates mapped to Schedule C lines
+- [x] Journal, period locks, P&L, balance sheet, trial balance
+- [x] OFX/QFX/CSV import, review queue, rules, reconciliation
+- [x] Invoices & bills, receipts vault (encrypted), invoice PDFs and statements
+- [x] Backups, restore drill and upgrade notes for a Hostinger VPS (docs/operations.md, ops/)
+- [x] **Tax-line report** ("hand this to your preparer"), plus a year-end checklist and a full CSV export
+- [x] Extras that arrived early: recurring entries, opening balances, household budgets, an optional local model
+      for category suggestions, a generated OpenAPI document
+- [ ] Installer/one-command provisioning beyond `docker compose up`
+- [ ] Pilot with 3–5 friendly customers
 
 ## Phase 2 — Tax projections & personal (May–Sep 2027)
 - Rule engine + US-2026 and US-2027 federal packs (1040, Sch 1/2/3, C, SE, 8995)
