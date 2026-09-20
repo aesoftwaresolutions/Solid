@@ -567,6 +567,24 @@ export interface CashFlow {
 }
 
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
+export interface SearchHit {
+  kind: string;
+  id: string;
+  label: string;
+  detail: string | null;
+  date: string | null;
+  amount: Money | null;
+  /** The screen that shows this record, so a hit can be a link. */
+  where: string;
+}
+
+export interface SearchResults {
+  query: string;
+  /** The amount the text was read as, if it read as one — so a person can see why 420.00 came back. */
+  amountInterpreted: Money | null;
+  groups: { kind: string; total: number; hits: SearchHit[] }[];
+}
+
 export interface OverviewEntityLine {
   entityId: string;
   legalName: string;
@@ -1043,6 +1061,9 @@ export const api = {
     method: 'PATCH',
     ...json(patch),
   }),
+
+  search: (orgId: string, entityId: string, q: string) =>
+    request<SearchResults>(`/orgs/${orgId}/entities/${entityId}/search?q=${encodeURIComponent(q)}`),
 
   overview: (orgId: string, from?: string, to?: string) =>
     request<Overview>(`/orgs/${orgId}/overview${from && to ? `?from=${from}&to=${to}` : ''}`),

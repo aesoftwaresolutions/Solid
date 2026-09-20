@@ -19,6 +19,7 @@ import PurchasesPage from './pages/PurchasesPage';
 import ReconcilePage from './pages/ReconcilePage';
 import ReportsPage from './pages/ReportsPage';
 import SalesPage from './pages/SalesPage';
+import SearchPage from './pages/SearchPage';
 
 function EntityNav() {
   const { orgId, entityId } = useParams();
@@ -41,6 +42,7 @@ function EntityNav() {
       <Link to={`${base}/budget`}>Budget</Link>
       <Link to={`${base}/reports`}>Reports</Link>
       <Link to={`${base}/import`}>Import</Link>
+      <Link to={`${base}/search`}>Search</Link>
     </>
   );
 }
@@ -82,6 +84,7 @@ function Shell() {
         <Route path="/orgs/:orgId/entities/:entityId/documents" element={<DocumentsPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/reports" element={<ReportsPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/import" element={<ImportPage />} />
+        <Route path="/orgs/:orgId/entities/:entityId/search" element={<SearchPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
