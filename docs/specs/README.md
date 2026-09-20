@@ -38,5 +38,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 032 | Customer statements | [032](032-customer-statements.md) | Done (owner review) | 012, 031 |
 | 033 | Fixes from the security and correctness review | [033](033-review-fixes.md) | Done (security review) | 016-032 |
 | 034 | Reconciliation screen | [034](034-reconciliation-screen.md) | Done (owner review) | 009, 011 |
+| 035 | Fixed assets and deduction screens | [035](035-assets-and-deductions-screens.md) | Done (owner + CPA review) | 014, 015 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

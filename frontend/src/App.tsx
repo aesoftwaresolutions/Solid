@@ -2,9 +2,11 @@ import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useAuth } from './auth';
 import { Loading } from './components';
 import AccountsPage from './pages/AccountsPage';
+import AssetsPage from './pages/AssetsPage';
 import BankPage from './pages/BankPage';
 import BudgetPage from './pages/BudgetPage';
 import DashboardPage from './pages/DashboardPage';
+import DeductionsPage from './pages/DeductionsPage';
 import DocumentsPage from './pages/DocumentsPage';
 import EntitiesPage from './pages/EntitiesPage';
 import InstancePage from './pages/InstancePage';
@@ -33,6 +35,8 @@ function EntityNav() {
       <Link to={`${base}/sales`}>Sales</Link>
       <Link to={`${base}/purchases`}>Purchases</Link>
       <Link to={`${base}/documents`}>Documents</Link>
+      <Link to={`${base}/assets`}>Assets</Link>
+      <Link to={`${base}/deductions`}>Deductions</Link>
       <Link to={`${base}/budget`}>Budget</Link>
       <Link to={`${base}/reports`}>Reports</Link>
     </>
@@ -68,6 +72,8 @@ function Shell() {
         <Route path="/orgs/:orgId/entities/:entityId/bank" element={<BankPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/reconcile" element={<ReconcilePage />} />
         <Route path="/orgs/:orgId/entities/:entityId/journal" element={<JournalPage />} />
+        <Route path="/orgs/:orgId/entities/:entityId/assets" element={<AssetsPage />} />
+        <Route path="/orgs/:orgId/entities/:entityId/deductions" element={<DeductionsPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/budget" element={<BudgetPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/sales" element={<SalesPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/purchases" element={<PurchasesPage />} />

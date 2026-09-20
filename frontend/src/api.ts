@@ -419,6 +419,98 @@ export interface ReconciliationCandidate {
   cleared: boolean;
 }
 
+export interface Asset {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  placedInServiceDate: string;
+  cost: Money;
+  salvageValue: Money;
+  usefulLifeMonths: number;
+  method: string;
+  status: string;
+  disposalDate: string | null;
+  accumulatedDepreciation: Money;
+  netBookValue: Money;
+  monthlySchedule: { month: string; amount: Money; posted: boolean }[];
+}
+
+export interface DepreciationRun {
+  months: { month: string; amount: Money; journalEntryId: string }[];
+  totalPosted: Money;
+  skippedMonths: string[];
+  skippedReason: string | null;
+}
+
+export interface FixedAssetReport {
+  asOf: string;
+  currency: string;
+  assets: {
+    assetId: string; name: string; placedInServiceDate: string; cost: Money;
+    accumulatedDepreciation: Money; netBookValue: Money; status: string;
+  }[];
+  totalCost: Money;
+  totalAccumulated: Money;
+  totalNetBookValue: Money;
+  taxNote: string;
+}
+
+export interface Vehicle {
+  id: string;
+  name: string;
+  description: string | null;
+  inServiceDate: string | null;
+  isArchived: boolean;
+}
+
+export interface Trip {
+  id: string;
+  vehicleId: string;
+  tripDate: string;
+  miles: string;
+  category: string;
+  purpose: string | null;
+  startLocation: string | null;
+  endLocation: string | null;
+}
+
+export interface MileageReport {
+  taxYear: number;
+  rateKnown: boolean;
+  ratePerMile: string | null;
+  businessMiles: string;
+  commutingMiles: string;
+  personalMiles: string;
+  otherMiles: string;
+  estimatedDeduction: Money | null;
+  source: string | null;
+  note: string;
+  byVehicle: { vehicleId: string; vehicleName: string; businessMiles: string; totalMiles: string }[];
+}
+
+export interface HomeOffice {
+  taxYear: number;
+  method: string;
+  totalHomeSquareFeet: number;
+  officeSquareFeet: number;
+  monthsUsed: number | null;
+}
+
+export interface HomeOfficeReport {
+  taxYear: number;
+  method: string;
+  officeSquareFeet: number;
+  countedSquareFeet: number;
+  maximumSquareFeet: number;
+  ratePerSquareFoot: string | null;
+  businessUsePercent: string | null;
+  monthsUsed: number | null;
+  deduction: Money | null;
+  source: string | null;
+  note: string;
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -757,6 +849,58 @@ export const api = {
     request<void>(
       `/orgs/${orgId}/entities/${entityId}/bank-accounts/${bankAccountId}/reconciliations/${reconciliationId}/undo`,
       { method: 'POST', ...json({}) }),
+
+  assets: (orgId: string, entityId: string) => request<Asset[]>(`/orgs/${orgId}/entities/${entityId}/assets`),
+  createAsset: (
+    orgId: string,
+    entityId: string,
+    body: {
+      name: string; placedInServiceDate: string; cost: Money; usefulLifeMonths: number;
+      assetAccountId: string; accumulatedAccountId: string; depreciationExpenseAccountId: string;
+      salvageValue?: Money; category?: string; description?: string;
+    },
+  ) => request<Asset>(`/orgs/${orgId}/entities/${entityId}/assets`, { method: 'POST', ...json(body) }),
+  runDepreciation: (orgId: string, entityId: string, throughMonth: string) =>
+    request<DepreciationRun>(`/orgs/${orgId}/entities/${entityId}/depreciation-runs`, {
+      method: 'POST',
+      ...json({ throughMonth }),
+    }),
+  disposeAsset: (
+    orgId: string,
+    entityId: string,
+    assetId: string,
+    body: { disposalDate: string; proceeds?: Money; depositAccountId?: string; gainLossAccountId: string },
+  ) => request<Asset>(`/orgs/${orgId}/entities/${entityId}/assets/${assetId}/dispose`, { method: 'POST', ...json(body) }),
+  fixedAssetReport: (orgId: string, entityId: string, asOf: string) =>
+    request<FixedAssetReport>(`/orgs/${orgId}/entities/${entityId}/reports/fixed-assets?asOf=${asOf}`),
+
+  vehicles: (orgId: string, entityId: string) => request<Vehicle[]>(`/orgs/${orgId}/entities/${entityId}/vehicles`),
+  createVehicle: (orgId: string, entityId: string, name: string) =>
+    request<Vehicle>(`/orgs/${orgId}/entities/${entityId}/vehicles`, { method: 'POST', ...json({ name }) }),
+  trips: (orgId: string, entityId: string, taxYear: number) =>
+    request<Trip[]>(`/orgs/${orgId}/entities/${entityId}/mileage-trips?taxYear=${taxYear}`),
+  addTrip: (
+    orgId: string,
+    entityId: string,
+    body: { vehicleId: string; tripDate: string; miles: string; category: string; purpose?: string },
+  ) => request<Trip>(`/orgs/${orgId}/entities/${entityId}/mileage-trips`, { method: 'POST', ...json(body) }),
+  deleteTrip: (orgId: string, entityId: string, tripId: string) =>
+    request<void>(`/orgs/${orgId}/entities/${entityId}/mileage-trips/${tripId}`, { method: 'DELETE' }),
+  mileageReport: (orgId: string, entityId: string, taxYear: number) =>
+    request<MileageReport>(`/orgs/${orgId}/entities/${entityId}/reports/mileage?taxYear=${taxYear}`),
+  homeOffice: (orgId: string, entityId: string, taxYear: number) =>
+    request<HomeOffice>(`/orgs/${orgId}/entities/${entityId}/home-office?taxYear=${taxYear}`),
+  saveHomeOffice: (
+    orgId: string,
+    entityId: string,
+    taxYear: number,
+    body: { method: string; totalHomeSquareFeet: number; officeSquareFeet: number; monthsUsed?: number },
+  ) => request<HomeOffice>(`/orgs/${orgId}/entities/${entityId}/home-office?taxYear=${taxYear}`, {
+    method: 'PUT',
+    ...json(body),
+  }),
+  homeOfficeReport: (orgId: string, entityId: string, taxYear: number) =>
+    request<HomeOfficeReport>(`/orgs/${orgId}/entities/${entityId}/reports/home-office?taxYear=${taxYear}`),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),
