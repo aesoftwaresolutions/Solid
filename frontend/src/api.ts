@@ -397,6 +397,28 @@ export interface CategorySuggestion {
   reason: string | null;
 }
 
+export interface Reconciliation {
+  id: string;
+  bankAccountId: string;
+  statementDate: string;
+  statementEndingBalance: Money;
+  beginningBalance: Money;
+  clearedBalance: Money;
+  difference: Money;
+  clearedCount: number;
+  status: string;
+  completedAt: string | null;
+}
+
+export interface ReconciliationCandidate {
+  lineId: string;
+  entryId: string;
+  entryDate: string;
+  memo: string | null;
+  amount: Money;
+  cleared: boolean;
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -698,6 +720,43 @@ export const api = {
       method: 'POST',
       ...json({}),
     }),
+
+  reconciliations: (orgId: string, entityId: string, bankAccountId: string) =>
+    request<Reconciliation[]>(
+      `/orgs/${orgId}/entities/${entityId}/bank-accounts/${bankAccountId}/reconciliations`),
+  startReconciliation: (
+    orgId: string,
+    entityId: string,
+    bankAccountId: string,
+    statementDate: string,
+    statementEndingBalance: Money,
+  ) =>
+    request<Reconciliation>(`/orgs/${orgId}/entities/${entityId}/bank-accounts/${bankAccountId}/reconciliations`, {
+      method: 'POST',
+      ...json({ statementDate, statementEndingBalance }),
+    }),
+  reconciliationCandidates: (orgId: string, entityId: string, bankAccountId: string, reconciliationId: string) =>
+    request<ReconciliationCandidate[]>(
+      `/orgs/${orgId}/entities/${entityId}/bank-accounts/${bankAccountId}/reconciliations/${reconciliationId}/candidates`),
+  setReconciliationCleared: (
+    orgId: string,
+    entityId: string,
+    bankAccountId: string,
+    reconciliationId: string,
+    lineIds: string[],
+    cleared: boolean,
+  ) =>
+    request<Reconciliation>(
+      `/orgs/${orgId}/entities/${entityId}/bank-accounts/${bankAccountId}/reconciliations/${reconciliationId}/cleared`,
+      { method: 'POST', ...json({ lineIds, cleared }) }),
+  completeReconciliation: (orgId: string, entityId: string, bankAccountId: string, reconciliationId: string) =>
+    request<Reconciliation>(
+      `/orgs/${orgId}/entities/${entityId}/bank-accounts/${bankAccountId}/reconciliations/${reconciliationId}/complete`,
+      { method: 'POST', ...json({}) }),
+  undoReconciliation: (orgId: string, entityId: string, bankAccountId: string, reconciliationId: string) =>
+    request<void>(
+      `/orgs/${orgId}/entities/${entityId}/bank-accounts/${bankAccountId}/reconciliations/${reconciliationId}/undo`,
+      { method: 'POST', ...json({}) }),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),

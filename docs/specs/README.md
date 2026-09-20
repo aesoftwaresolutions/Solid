@@ -37,5 +37,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 031 | Invoice PDF | [031](031-invoice-pdf.md) | Done (owner review) | 012 |
 | 032 | Customer statements | [032](032-customer-statements.md) | Done (owner review) | 012, 031 |
 | 033 | Fixes from the security and correctness review | [033](033-review-fixes.md) | Done (security review) | 016-032 |
+| 034 | Reconciliation screen | [034](034-reconciliation-screen.md) | Done (owner review) | 009, 011 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

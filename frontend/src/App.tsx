@@ -13,6 +13,7 @@ import LoginPage from './pages/LoginPage';
 import OrganizationPage from './pages/OrganizationPage';
 import OrganizationsPage from './pages/OrganizationsPage';
 import PurchasesPage from './pages/PurchasesPage';
+import ReconcilePage from './pages/ReconcilePage';
 import ReportsPage from './pages/ReportsPage';
 import SalesPage from './pages/SalesPage';
 
@@ -27,6 +28,7 @@ function EntityNav() {
       <Link to={base}>Dashboard</Link>
       <Link to={`${base}/accounts`}>Accounts</Link>
       <Link to={`${base}/bank`}>Bank</Link>
+      <Link to={`${base}/reconcile`}>Reconcile</Link>
       <Link to={`${base}/journal`}>Journal</Link>
       <Link to={`${base}/sales`}>Sales</Link>
       <Link to={`${base}/purchases`}>Purchases</Link>
@@ -64,6 +66,7 @@ function Shell() {
         <Route path="/orgs/:orgId/entities/:entityId" element={<DashboardPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/accounts" element={<AccountsPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/bank" element={<BankPage />} />
+        <Route path="/orgs/:orgId/entities/:entityId/reconcile" element={<ReconcilePage />} />
         <Route path="/orgs/:orgId/entities/:entityId/journal" element={<JournalPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/budget" element={<BudgetPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/sales" element={<SalesPage />} />
