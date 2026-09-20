@@ -26,6 +26,13 @@ const common = {
   [`GET ${base}/reports/trial-balance`]: {
     asOf: `${year}-12-31`, currency: 'USD', rows: [], totalDebit: money('0.00'), totalCredit: money('0.00'),
   },
+  [`GET ${base}/reports/cash-flow`]: {
+    from: `${year}-01-01`, to: `${year}-12-31`, currency: 'USD', openingCash: money('100.00'),
+    operating: { rows: [], total: money('50.00') }, investing: { rows: [], total: money('0.00') },
+    financing: { rows: [], total: money('0.00') }, unclassified: { rows: [], total: money('0.00') },
+    netChange: money('50.00'), closingCash: money('150.00'),
+    note: 'Prepared by the direct method from the posted ledger.',
+  },
   [`GET ${base}/reports/tax-lines`]: {
     taxYear: year, from: `${year}-01-01`, to: `${year}-12-31`, lines: [], unmapped: [],
     totals: { income: money('0.00'), costOfGoodsSold: money('0.00'), expenses: money('0.00'), netProfit: money('0.00') },

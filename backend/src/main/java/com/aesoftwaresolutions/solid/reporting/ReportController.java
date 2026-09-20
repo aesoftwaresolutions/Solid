@@ -14,10 +14,23 @@ class ReportController {
 
     private final ReportService reports;
     private final TaxLineReportService taxLines;
+    private final CashFlowService cashFlow;
 
-    ReportController(ReportService reports, TaxLineReportService taxLines) {
+    ReportController(ReportService reports, TaxLineReportService taxLines, CashFlowService cashFlow) {
         this.reports = reports;
         this.taxLines = taxLines;
+        this.cashFlow = cashFlow;
+    }
+
+    @GetMapping("/cash-flow")
+    Reports.CashFlow cashFlow(@PathVariable UUID orgId, @PathVariable UUID entityId,
+                              @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                                      iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                              LocalDate from,
+                              @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                                      iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                              LocalDate to) {
+        return cashFlow.cashFlow(orgId, entityId, from, to);
     }
 
     @GetMapping("/tax-lines")

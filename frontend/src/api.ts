@@ -547,6 +547,25 @@ export interface SalesTaxReport {
   note: string;
 }
 
+export interface CashFlowSection {
+  rows: { accountId: string | null; code: string | null; name: string; amount: Money }[];
+  total: Money;
+}
+
+export interface CashFlow {
+  from: string;
+  to: string;
+  currency: string;
+  openingCash: Money;
+  operating: CashFlowSection;
+  investing: CashFlowSection;
+  financing: CashFlowSection;
+  unclassified: CashFlowSection;
+  netChange: Money;
+  closingCash: Money;
+  note: string;
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -974,6 +993,9 @@ export const api = {
     method: 'PATCH',
     ...json(patch),
   }),
+
+  cashFlow: (orgId: string, entityId: string, from: string, to: string) =>
+    request<CashFlow>(`/orgs/${orgId}/entities/${entityId}/reports/cash-flow?from=${from}&to=${to}`),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),

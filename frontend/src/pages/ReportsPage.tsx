@@ -45,6 +45,7 @@ export default function ReportsPage() {
   const tb = useLoader(() => api.trialBalance(orgId, entityId, to), [orgId, entityId, to]);
   const tax = useLoader(() => api.taxLines(orgId, entityId, year), [orgId, entityId, year]);
   const checklist = useLoader(() => api.yearEndChecklist(orgId, entityId, year), [orgId, entityId, year]);
+  const cash = useLoader(() => api.cashFlow(orgId, entityId, from, to), [orgId, entityId, from, to]);
 
   return (
     <main>
@@ -127,6 +128,49 @@ export default function ReportsPage() {
               </tr>
             </tbody>
           </table>
+        )}
+      </Card>
+
+      <Card title={`Cash flow ${year}`}>
+        <ErrorMessage error={cash.error} />
+        {cash.value && (
+          <>
+            <table>
+              <tbody>
+                <tr>
+                  <td>Cash at the start</td>
+                  <td className="money">{formatMoney(cash.value.openingCash)}</td>
+                </tr>
+                <tr>
+                  <td>Operating</td>
+                  <td className="money">{formatMoney(cash.value.operating.total)}</td>
+                </tr>
+                <tr>
+                  <td>Investing</td>
+                  <td className="money">{formatMoney(cash.value.investing.total)}</td>
+                </tr>
+                <tr>
+                  <td>Financing</td>
+                  <td className="money">{formatMoney(cash.value.financing.total)}</td>
+                </tr>
+                {cash.value.unclassified.rows.length > 0 && (
+                  <tr>
+                    <td>Unclassified</td>
+                    <td className="money">{formatMoney(cash.value.unclassified.total)}</td>
+                  </tr>
+                )}
+                <tr>
+                  <td>
+                    <strong>Cash at the end</strong>
+                  </td>
+                  <td className="money">
+                    <strong>{formatMoney(cash.value.closingCash)}</strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="muted">{cash.value.note}</p>
+          </>
         )}
       </Card>
 

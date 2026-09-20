@@ -29,6 +29,19 @@ public final class Reports {
                                 Section costOfGoodsSold, Money grossProfit, Section expenses, Money netIncome) {
     }
 
+    public record CashFlowSection(List<Row> rows, Money total) {
+    }
+
+    /**
+     * Cash in and out by where it came from or went to.
+     *
+     * @param unclassified movements the rules could not place — reported, never folded into operating
+     */
+    public record CashFlow(LocalDate from, LocalDate to, String currency, Money openingCash,
+                           CashFlowSection operating, CashFlowSection investing, CashFlowSection financing,
+                           CashFlowSection unclassified, Money netChange, Money closingCash, String note) {
+    }
+
     public record BalanceSheet(LocalDate asOf, String currency, LocalDate fiscalYearStart, Section assets,
                                Section liabilities, Section equity, Money totalLiabilitiesAndEquity,
                                boolean balanced) {
