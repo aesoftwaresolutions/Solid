@@ -511,6 +511,21 @@ export interface HomeOfficeReport {
   note: string;
 }
 
+export interface YearEndChecklist {
+  taxYear: number;
+  from: string;
+  to: string;
+  ready: boolean;
+  items: {
+    key: string;
+    title: string;
+    status: 'done' | 'todo' | 'unknown';
+    detail: string;
+    count: number | null;
+    where: string;
+  }[];
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -901,6 +916,9 @@ export const api = {
   }),
   homeOfficeReport: (orgId: string, entityId: string, taxYear: number) =>
     request<HomeOfficeReport>(`/orgs/${orgId}/entities/${entityId}/reports/home-office?taxYear=${taxYear}`),
+
+  yearEndChecklist: (orgId: string, entityId: string, taxYear: number) =>
+    request<YearEndChecklist>(`/orgs/${orgId}/entities/${entityId}/reports/year-end-checklist?taxYear=${taxYear}`),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),

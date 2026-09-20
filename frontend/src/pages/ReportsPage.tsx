@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { api, formatMoney, type Section } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
 
@@ -44,6 +44,7 @@ export default function ReportsPage() {
   const bs = useLoader(() => api.balanceSheet(orgId, entityId, to), [orgId, entityId, to]);
   const tb = useLoader(() => api.trialBalance(orgId, entityId, to), [orgId, entityId, to]);
   const tax = useLoader(() => api.taxLines(orgId, entityId, year), [orgId, entityId, year]);
+  const checklist = useLoader(() => api.yearEndChecklist(orgId, entityId, year), [orgId, entityId, year]);
 
   return (
     <main>
@@ -126,6 +127,39 @@ export default function ReportsPage() {
               </tr>
             </tbody>
           </table>
+        )}
+      </Card>
+
+      <Card title={`Is ${year} finished?`}>
+        <ErrorMessage error={checklist.error} />
+        {checklist.value && (
+          <>
+            <p className={checklist.value.ready ? 'notice' : 'muted'}>
+              {checklist.value.ready
+                ? 'The bookkeeping steps for this year are done. That is not the same as a correct return — your preparer decides that.'
+                : 'Still to do before this year can be handed over:'}
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Step</th>
+                  <th>State</th>
+                  <th>What is left</th>
+                </tr>
+              </thead>
+              <tbody>
+                {checklist.value.items.map((item) => (
+                  <tr key={item.key}>
+                    <td>
+                      <Link to={`/orgs/${orgId}/entities/${entityId}/${item.where}`}>{item.title}</Link>
+                    </td>
+                    <td>{item.status}</td>
+                    <td className="muted">{item.detail}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </Card>
 
