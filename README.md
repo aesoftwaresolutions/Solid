@@ -18,7 +18,8 @@ Sign in (with mandatory two-factor), create an organization and its entities, an
 | **Assets & deductions** | Fixed assets with straight-line book depreciation and disposal, mileage log, home-office declaration |
 | **Personal** | Household chart of accounts, monthly budgets, budget vs actual |
 | **Documents** | An encrypted vault for receipts and paperwork, linked to the records they support |
-| **Reports** | Trial balance, P&L, balance sheet, tax-line report with a readiness check, year-end checklist, full CSV export |
+| **Reports** | Trial balance, P&L, balance sheet, statement of cash flows, tax-line report with a readiness check, year-end checklist, full CSV export |
+| **Moving in** | CSV import of a chart of accounts, customer list or vendor list: previewed first, all-or-nothing, safe to re-run |
 | **Operations** | Backups and a restore drill, a master-key guard that refuses to start against the wrong key, an instance page, a generated OpenAPI document |
 | **Local AI (optional, off)** | Category suggestions from a model running on your own server |
 
