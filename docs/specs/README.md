@@ -41,5 +41,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 035 | Fixed assets and deduction screens | [035](035-assets-and-deductions-screens.md) | Done (owner + CPA review) | 014, 015 |
 | 036 | Year-end checklist | [036](036-year-end-checklist.md) | Done (owner + CPA review) | 009, 010, 013, 014, 021 |
 | 037 | Sales tax on invoices | [037](037-sales-tax.md) | Done (owner + CPA review) | 012 |
+| 038 | Editing customers and vendors | [038](038-editing-customers-and-vendors.md) | Done (owner review) | 012, 013 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

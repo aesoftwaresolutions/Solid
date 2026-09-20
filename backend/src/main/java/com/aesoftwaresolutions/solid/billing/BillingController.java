@@ -1,5 +1,6 @@
 package com.aesoftwaresolutions.solid.billing;
 
+import com.aesoftwaresolutions.solid.common.Patch;
 import com.aesoftwaresolutions.solid.money.Money;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -10,6 +11,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -66,6 +68,16 @@ class BillingController {
                                           @Valid @RequestBody CreateCustomer body) {
         return billing.createCustomer(orgId, entityId, body.name(), body.email(), body.phone(), body.billingAddress(),
                 body.notes());
+    }
+
+    @PatchMapping("/customers/{customerId}")
+    BillingModels.Customer updateCustomer(@PathVariable UUID orgId, @PathVariable UUID entityId,
+                                          @PathVariable UUID customerId,
+                                          @RequestBody Map<String, Object> body) {
+        return billing.updateCustomer(orgId, entityId, customerId,
+                Patch.text(body, "name", 200), Patch.text(body, "email", 254), Patch.text(body, "phone", 40),
+                Patch.text(body, "billingAddress", 500), Patch.text(body, "notes", 1000),
+                Patch.flag(body, "archived"));
     }
 
     @GetMapping("/invoices")

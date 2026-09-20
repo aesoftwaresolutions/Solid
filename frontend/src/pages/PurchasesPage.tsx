@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, formatMoney, type Account, type Bill } from '../api';
+import { api, formatMoney, type Account, type Bill, type Vendor } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
 
 const TERMS = ['due_on_receipt', 'net_15', 'net_30', 'net_60'];
@@ -19,6 +19,7 @@ export default function PurchasesPage() {
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
   const [payingBill, setPayingBill] = useState<Bill | null>(null);
+  const [editing, setEditing] = useState<Vendor | null>(null);
 
   const postable = useMemo(
     () => (accounts.value ?? []).filter((a: Account) => !a.isHeader && !a.isArchived),
@@ -53,15 +54,53 @@ export default function PurchasesPage() {
       <Card title="Vendors">
         <NewVendor orgId={orgId} entityId={entityId} onCreated={vendors.reload} />
         {!vendors.value && !vendors.error && <Loading what="vendors" />}
-        <ul>
-          {(vendors.value ?? []).map((vendor) => (
-            <li key={vendor.id}>
-              {vendor.name}
-              {vendor.is1099Vendor ? ' · 1099' : ''}
-            </li>
-          ))}
-        </ul>
+        {vendors.value && vendors.value.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>1099</th>
+                <th>Tax ID (last 4)</th>
+                <th>Classification</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {vendors.value.map((vendor) => (
+                <tr key={vendor.id}>
+                  <td>
+                    {vendor.name}
+                    {vendor.isArchived ? ' · archived' : ''}
+                  </td>
+                  <td>{vendor.is1099Vendor ? 'yes' : 'no'}</td>
+                  <td>{vendor.taxIdLast4 ?? '—'}</td>
+                  <td>{vendor.taxClassification ?? '—'}</td>
+                  <td>
+                    <button type="button" className="secondary" onClick={() => setEditing(vendor)}>
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Card>
+
+      {editing && (
+        <Card title={`Edit ${editing.name}`}>
+          <EditVendor
+            orgId={orgId}
+            entityId={entityId}
+            vendor={editing}
+            onDone={() => {
+              setEditing(null);
+              vendors.reload();
+              form1099.reload();
+            }}
+          />
+        </Card>
+      )}
 
       <Card title="New bill">
         {vendors.value && vendors.value.length === 0 && <p className="muted">Add a vendor first.</p>}
@@ -424,6 +463,96 @@ function PayBill({
       </label>
       <button type="submit" disabled={busy}>
         Save payment
+      </button>
+    </form>
+  );
+}
+
+/**
+ * The details a 1099 needs. Only the last four digits of a taxpayer ID are ever stored — enough to know a W-9 is
+ * on file, without holding something worth stealing.
+ */
+function EditVendor({
+  orgId,
+  entityId,
+  vendor,
+  onDone,
+}: {
+  orgId: string;
+  entityId: string;
+  vendor: Vendor;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState(vendor.name);
+  const [email, setEmail] = useState(vendor.email ?? '');
+  const [taxIdLast4, setTaxIdLast4] = useState(vendor.taxIdLast4 ?? '');
+  const [taxClassification, setTaxClassification] = useState(vendor.taxClassification ?? '');
+  const [is1099Vendor, setIs1099Vendor] = useState(vendor.is1099Vendor);
+  const [archived, setArchived] = useState(vendor.isArchived);
+  const [error, setError] = useState<unknown>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError(undefined);
+        api
+          .updateVendor(orgId, entityId, vendor.id, {
+            name: name.trim(),
+            email: email.trim() === '' ? null : email.trim(),
+            taxIdLast4: taxIdLast4.trim() === '' ? null : taxIdLast4.trim(),
+            taxClassification: taxClassification === '' ? null : taxClassification,
+            is1099Vendor,
+            archived,
+          })
+          .then(onDone)
+          .catch(setError)
+          .finally(() => setBusy(false));
+      }}
+    >
+      <ErrorMessage error={error} />
+      <label>
+        Name
+        <input value={name} required maxLength={200} onChange={(e) => setName(e.target.value)} />
+      </label>
+      <label>
+        Email
+        <input type="email" value={email} maxLength={254} onChange={(e) => setEmail(e.target.value)} />
+      </label>
+      <label>
+        Taxpayer ID — last four digits only
+        <input
+          value={taxIdLast4}
+          inputMode="numeric"
+          maxLength={4}
+          placeholder="6789"
+          onChange={(e) => setTaxIdLast4(e.target.value)}
+        />
+      </label>
+      <label>
+        Tax classification (from their W-9)
+        <select value={taxClassification} onChange={(e) => setTaxClassification(e.target.value)}>
+          <option value="">not recorded</option>
+          {['individual', 'sole_proprietor', 'single_member_llc', 'partnership', 'c_corporation', 's_corporation',
+            'trust_estate', 'llc_c', 'llc_s', 'llc_p', 'other'].map((value) => (
+            <option key={value} value={value}>
+              {value.replace(/_/g, ' ')}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <input type="checkbox" checked={is1099Vendor} onChange={(e) => setIs1099Vendor(e.target.checked)} />
+        Track for 1099
+      </label>
+      <label>
+        <input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} />
+        Archived
+      </label>
+      <button type="submit" disabled={busy}>
+        Save vendor
       </button>
     </form>
   );

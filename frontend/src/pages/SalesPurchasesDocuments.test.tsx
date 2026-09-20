@@ -327,3 +327,47 @@ describe('spec 037: sales tax on the sales page', () => {
     expect(created.lines[0].taxRateId).toBe('r1');
   });
 });
+
+describe('spec 038: editing a vendor', () => {
+  const vendor = {
+    id: 'v1', name: 'Contractor Co', email: null, taxIdLast4: null, taxClassification: null,
+    is1099Vendor: true, defaultExpenseAccountId: null, isArchived: false,
+  };
+  const aging = emptyAging;
+  const form1099 = {
+    taxYear: 2025, thresholdKnown: true, threshold: money('2000.00'), thresholdSource: 'IRS instructions',
+    note: 'Amounts are payments made during the year.',
+    vendors: [{ vendorId: 'v1', vendorName: 'Contractor Co', paidInYear: money('3000.00'), meetsThreshold: true,
+      missingInformation: ['Taxpayer ID (collect a W-9)'] }],
+  };
+
+  test('fills in the details the 1099 report asks for, sending only the last four digits', async () => {
+    const user = userEvent.setup();
+    const { calls } = mockApi({
+      [`GET ${base}/accounts`]: accounts,
+      [`GET ${base}/vendors`]: [vendor],
+      [`GET ${base}/bills`]: [],
+      [`GET ${base}/reports/accounts-payable-aging`]: aging,
+      [`GET ${base}/reports/form-1099-candidates`]: form1099,
+      [`PATCH ${base}/vendors/v1`]: { ...vendor, taxIdLast4: '6789', taxClassification: 'single_member_llc' },
+    });
+
+    renderAt('/orgs/o1/entities/e1/purchases', '/orgs/:orgId/entities/:entityId/purchases', <PurchasesPage />);
+
+    expect(await screen.findByText('Taxpayer ID (collect a W-9)')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+    const taxId = await screen.findByLabelText('Taxpayer ID — last four digits only');
+    expect(taxId).toHaveAttribute('maxLength', '4');
+    await user.type(taxId, '6789');
+    await user.selectOptions(screen.getByLabelText('Tax classification (from their W-9)'), 'single_member_llc');
+    await user.click(screen.getByRole('button', { name: 'Save vendor' }));
+
+    await waitFor(() => expect(calls.some((c) => c.key === `PATCH ${base}/vendors/v1`)).toBe(true));
+    expect(calls.find((c) => c.key === `PATCH ${base}/vendors/v1`)?.body).toMatchObject({
+      taxIdLast4: '6789',
+      taxClassification: 'single_member_llc',
+      is1099Vendor: true,
+    });
+  });
+});

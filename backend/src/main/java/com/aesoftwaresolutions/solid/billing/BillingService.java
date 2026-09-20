@@ -1,7 +1,9 @@
 package com.aesoftwaresolutions.solid.billing;
 
+import com.aesoftwaresolutions.solid.audit.AuditLog;
 import com.aesoftwaresolutions.solid.common.BusinessRuleException;
 import com.aesoftwaresolutions.solid.common.Ids;
+import com.aesoftwaresolutions.solid.common.Patch;
 import com.aesoftwaresolutions.solid.common.NotFoundException;
 import com.aesoftwaresolutions.solid.ledger.Account;
 import com.aesoftwaresolutions.solid.ledger.AccountService;
@@ -21,6 +23,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -43,15 +47,17 @@ public class BillingService {
     private final AccountService accounts;
     private final JournalService journal;
     private final SalesTaxService salesTax;
+    private final AuditLog audit;
 
     BillingService(JdbcClient db, OrgScope orgScope, OrgService orgs, AccountService accounts, JournalService journal,
-                   SalesTaxService salesTax) {
+                   SalesTaxService salesTax, AuditLog audit) {
         this.db = db;
         this.orgScope = orgScope;
         this.orgs = orgs;
         this.accounts = accounts;
         this.journal = journal;
         this.salesTax = salesTax;
+        this.audit = audit;
     }
 
     // ---------------- customers ----------------
@@ -123,6 +129,51 @@ public class BillingService {
                     .param("entity", entityId).param("status", status).query(UUID.class).list();
             return ids.stream().map(id -> loadInvoice(entityId, id)).toList();
         });
+    }
+
+    /** Changes only the fields that were sent; empty means "leave it", present-with-null means "clear it". */
+    public BillingModels.Customer updateCustomer(UUID orgId, UUID entityId, UUID customerId,
+                                                 Patch.Field<String> name, Patch.Field<String> email,
+                                                 Patch.Field<String> phone, Patch.Field<String> billingAddress,
+                                                 Patch.Field<String> notes, Patch.Field<Boolean> archived) {
+        orgs.getEntity(orgId, entityId);
+        if (name.present() && (name.value() == null || name.value().isBlank())) {
+            throw new IllegalArgumentException("A customer needs a name");
+        }
+        if (email.hasValue()) {
+            PayableService.checkEmail(email.value());
+        }
+
+        List<String> changed = new ArrayList<>();
+        BillingModels.Customer updated = orgScope.call(orgId, () -> {
+            findCustomer(entityId, customerId);
+            setField(changed, "name", "update ar_ap.customer set name = ? where entity_id = ? and id = ?",
+                    PayableService.field(name, true), entityId, customerId);
+            setField(changed, "email", "update ar_ap.customer set email = ? where entity_id = ? and id = ?",
+                    PayableService.field(email, false), entityId, customerId);
+            setField(changed, "phone", "update ar_ap.customer set phone = ? where entity_id = ? and id = ?",
+                    PayableService.field(phone, false), entityId, customerId);
+            setField(changed, "billingAddress",
+                    "update ar_ap.customer set billing_address = ? where entity_id = ? and id = ?",
+                    PayableService.field(billingAddress, false), entityId, customerId);
+            setField(changed, "notes", "update ar_ap.customer set notes = ? where entity_id = ? and id = ?",
+                    PayableService.field(notes, false), entityId, customerId);
+            setField(changed, "archived", "update ar_ap.customer set is_archived = ? where entity_id = ? and id = ?",
+                    PayableService.field(archived, false), entityId, customerId);
+            return findCustomer(entityId, customerId);
+        });
+        // Field names only: an address is not something to copy into a log.
+        audit.record(AuditLog.Actor.current(), orgId, "customer_updated", "customer", customerId,
+                Map.of("fields", changed));
+        return updated;
+    }
+
+    private void setField(List<String> changed, String field, String sql, Patch.Field<Object> value, UUID entityId,
+                          UUID id) {
+        if (value.present()) {
+            db.sql(sql).params(value.value(), entityId, id).update();
+            changed.add(field);
+        }
     }
 
     /** One customer, for the invoice PDF and any screen that needs a name and address. */

@@ -1,7 +1,9 @@
 package com.aesoftwaresolutions.solid.billing;
 
+import com.aesoftwaresolutions.solid.audit.AuditLog;
 import com.aesoftwaresolutions.solid.common.BusinessRuleException;
 import com.aesoftwaresolutions.solid.common.Ids;
+import com.aesoftwaresolutions.solid.common.Patch;
 import com.aesoftwaresolutions.solid.common.NotFoundException;
 import com.aesoftwaresolutions.solid.ledger.Account;
 import com.aesoftwaresolutions.solid.ledger.AccountService;
@@ -17,6 +19,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -38,15 +41,17 @@ public class PayableService {
     private final AccountService accounts;
     private final JournalService journal;
     private final Form1099Thresholds thresholds;
+    private final AuditLog audit;
 
     PayableService(JdbcClient db, OrgScope orgScope, OrgService orgs, AccountService accounts, JournalService journal,
-                   Form1099Thresholds thresholds) {
+                   Form1099Thresholds thresholds, AuditLog audit) {
         this.db = db;
         this.orgScope = orgScope;
         this.orgs = orgs;
         this.accounts = accounts;
         this.journal = journal;
         this.thresholds = thresholds;
+        this.audit = audit;
     }
 
     // ---------------- vendors ----------------
@@ -69,6 +74,70 @@ public class PayableService {
                     .update();
             return findVendor(entityId, id);
         });
+    }
+
+    /**
+     * Changes only the fields that were sent. Each parameter is an {@link Optional}: empty means "leave it",
+     * present-with-null means "clear it" — the distinction matters for a phone number someone wants removed.
+     */
+    public PayableModels.Vendor updateVendor(UUID orgId, UUID entityId, UUID vendorId, Patch.Field<String> name,
+                                             Patch.Field<String> email, Patch.Field<String> phone,
+                                             Patch.Field<String> address, Patch.Field<String> taxIdLast4,
+                                             Patch.Field<String> taxClassification,
+                                             Patch.Field<Boolean> is1099Vendor,
+                                             Patch.Field<UUID> defaultExpenseAccountId,
+                                             Patch.Field<Boolean> archived) {
+        orgs.getEntity(orgId, entityId);
+        if (name.present() && (name.value() == null || name.value().isBlank())) {
+            throw new IllegalArgumentException("A vendor needs a name");
+        }
+        if (email.hasValue()) {
+            checkEmail(email.value());
+        }
+        if (taxIdLast4.hasValue() && !taxIdLast4.value().matches("[0-9]{4}")) {
+            throw new IllegalArgumentException("Only the last four digits of the taxpayer ID are stored, so this "
+                    + "must be exactly four digits.");
+        }
+        if (taxClassification.hasValue() && !TAX_CLASSIFICATIONS.contains(taxClassification.value())) {
+            throw new IllegalArgumentException("Unknown tax classification: " + taxClassification.value());
+        }
+        if (defaultExpenseAccountId.hasValue()) {
+            Account account = accounts.get(orgId, entityId, defaultExpenseAccountId.value());
+            if (account.type() != AccountType.expense || account.isHeader() || account.isArchived()) {
+                throw new BusinessRuleException("ACCOUNT_NOT_POSTABLE",
+                        "A vendor's default account must be an active, non-header expense account");
+            }
+        }
+
+        List<String> changed = new ArrayList<>();
+        PayableModels.Vendor updated = orgScope.call(orgId, () -> {
+            findVendor(entityId, vendorId);
+            set(changed, "name", "update ar_ap.vendor set name = ? where entity_id = ? and id = ?",
+                    field(name, true), entityId, vendorId);
+            set(changed, "email", "update ar_ap.vendor set email = ? where entity_id = ? and id = ?",
+                    field(email, false), entityId, vendorId);
+            set(changed, "phone", "update ar_ap.vendor set phone = ? where entity_id = ? and id = ?",
+                    field(phone, false), entityId, vendorId);
+            set(changed, "address", "update ar_ap.vendor set address = ? where entity_id = ? and id = ?",
+                    field(address, false), entityId, vendorId);
+            set(changed, "taxIdLast4", "update ar_ap.vendor set tax_id_last4 = ? where entity_id = ? and id = ?",
+                    field(taxIdLast4, false), entityId, vendorId);
+            set(changed, "taxClassification",
+                    "update ar_ap.vendor set tax_classification = ? where entity_id = ? and id = ?",
+                    field(taxClassification, false), entityId, vendorId);
+            set(changed, "is1099Vendor", "update ar_ap.vendor set is_1099_vendor = ? where entity_id = ? and id = ?",
+                    field(is1099Vendor, false), entityId, vendorId);
+            set(changed, "defaultExpenseAccountId",
+                    "update ar_ap.vendor set default_expense_account_id = ? where entity_id = ? and id = ?",
+                    field(defaultExpenseAccountId, false), entityId, vendorId);
+            set(changed, "archived", "update ar_ap.vendor set is_archived = ? where entity_id = ? and id = ?",
+                    field(archived, false), entityId, vendorId);
+            return findVendor(entityId, vendorId);
+        });
+        // Field names only: the values include a taxpayer id fragment and an address.
+        audit.record(AuditLog.Actor.current(), orgId, "vendor_updated", "vendor", vendorId,
+                Map.of("fields", changed));
+        return updated;
     }
 
     public List<PayableModels.Vendor> listVendors(UUID orgId, UUID entityId) {
@@ -442,6 +511,37 @@ public class PayableService {
 
     private static LocalDate date(Object value) {
         return value instanceof java.sql.Date d ? d.toLocalDate() : (LocalDate) value;
+    }
+
+    static final java.util.Set<String> TAX_CLASSIFICATIONS = java.util.Set.of("individual", "sole_proprietor",
+            "single_member_llc", "partnership", "c_corporation", "s_corporation", "trust_estate", "llc_c", "llc_s",
+            "llc_p", "other");
+
+    static void checkEmail(String email) {
+        if (!email.isBlank() && (!email.contains("@") || email.length() > 254)) {
+            throw new IllegalArgumentException("That does not look like an email address");
+        }
+    }
+
+    /** Runs one column update when the caller sent that field, and records which fields changed. */
+    private void set(List<String> changed, String field, String sql, Patch.Field<Object> value, UUID entityId,
+                     UUID id) {
+        if (value.present()) {
+            db.sql(sql).params(value.value(), entityId, id).update();
+            changed.add(field);
+        }
+    }
+
+    /** Widens a typed patch field to Object, trimming text when asked. */
+    static <T> Patch.Field<Object> field(Patch.Field<T> source, boolean trim) {
+        if (!source.present()) {
+            return Patch.Field.absent();
+        }
+        Object value = source.value();
+        if (trim && value instanceof String text) {
+            value = text.trim();
+        }
+        return Patch.Field.of(value);
     }
 
     private static final String VENDOR_SELECT = """

@@ -1,5 +1,6 @@
 package com.aesoftwaresolutions.solid.billing;
 
+import com.aesoftwaresolutions.solid.common.Patch;
 import com.aesoftwaresolutions.solid.money.Money;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -69,6 +71,16 @@ class PayableController {
         return payables.createVendor(orgId, entityId, body.name(), body.email(), body.phone(), body.address(),
                 body.taxIdLast4(), body.taxClassification(), Boolean.TRUE.equals(body.is1099Vendor()),
                 body.defaultExpenseAccountId());
+    }
+
+    @PatchMapping("/vendors/{vendorId}")
+    PayableModels.Vendor updateVendor(@PathVariable UUID orgId, @PathVariable UUID entityId,
+                                      @PathVariable UUID vendorId, @RequestBody Map<String, Object> body) {
+        return payables.updateVendor(orgId, entityId, vendorId,
+                Patch.text(body, "name", 200), Patch.text(body, "email", 254), Patch.text(body, "phone", 40),
+                Patch.text(body, "address", 500), Patch.text(body, "taxIdLast4", 4),
+                Patch.text(body, "taxClassification", 40), Patch.flag(body, "is1099Vendor"),
+                Patch.id(body, "defaultExpenseAccountId"), Patch.flag(body, "archived"));
     }
 
     @GetMapping("/bills")

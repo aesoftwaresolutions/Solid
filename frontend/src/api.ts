@@ -956,6 +956,25 @@ export const api = {
   salesTaxReport: (orgId: string, entityId: string, from: string, to: string) =>
     request<SalesTaxReport>(`/orgs/${orgId}/entities/${entityId}/reports/sales-tax?from=${from}&to=${to}`),
 
+  updateCustomer: (
+    orgId: string,
+    entityId: string,
+    customerId: string,
+    patch: Record<string, string | boolean | null>,
+  ) => request<Customer>(`/orgs/${orgId}/entities/${entityId}/customers/${customerId}`, {
+    method: 'PATCH',
+    ...json(patch),
+  }),
+  updateVendor: (
+    orgId: string,
+    entityId: string,
+    vendorId: string,
+    patch: Record<string, string | boolean | null>,
+  ) => request<Vendor>(`/orgs/${orgId}/entities/${entityId}/vendors/${vendorId}`, {
+    method: 'PATCH',
+    ...json(patch),
+  }),
+
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),
   balanceSheet: (orgId: string, entityId: string, asOf: string) =>
