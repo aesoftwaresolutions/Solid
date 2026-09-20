@@ -9,6 +9,7 @@ import DashboardPage from './pages/DashboardPage';
 import DeductionsPage from './pages/DeductionsPage';
 import DocumentsPage from './pages/DocumentsPage';
 import EntitiesPage from './pages/EntitiesPage';
+import ImportPage from './pages/ImportPage';
 import InstancePage from './pages/InstancePage';
 import JournalPage from './pages/JournalPage';
 import LoginPage from './pages/LoginPage';
@@ -39,6 +40,7 @@ function EntityNav() {
       <Link to={`${base}/deductions`}>Deductions</Link>
       <Link to={`${base}/budget`}>Budget</Link>
       <Link to={`${base}/reports`}>Reports</Link>
+      <Link to={`${base}/import`}>Import</Link>
     </>
   );
 }
@@ -79,6 +81,7 @@ function Shell() {
         <Route path="/orgs/:orgId/entities/:entityId/purchases" element={<PurchasesPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/documents" element={<DocumentsPage />} />
         <Route path="/orgs/:orgId/entities/:entityId/reports" element={<ReportsPage />} />
+        <Route path="/orgs/:orgId/entities/:entityId/import" element={<ImportPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

@@ -567,6 +567,28 @@ export interface CashFlow {
 }
 
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
+export type ImportKind = 'accounts' | 'customers' | 'vendors';
+
+export interface ImportResultRow {
+  line: number;
+  key: string;
+  action: 'create' | 'skip' | 'error';
+  detail: string;
+}
+
+export interface ImportResult {
+  kind: ImportKind;
+  /** False for a preview, and false for an import that was refused because a row was wrong. */
+  committed: boolean;
+  totalRows: number;
+  created: number;
+  skipped: number;
+  problemCount: number;
+  ready: boolean;
+  ignoredColumns: string[];
+  rows: ImportResultRow[];
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string | undefined;
@@ -583,7 +605,11 @@ function csrfToken(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+/**
+ * @param accepted status codes whose body is a normal result rather than an error — the import endpoint
+ *   answers 422 with the same report it would have returned on success, listing what is wrong with the file.
+ */
+async function request<T>(path: string, init: RequestInit = {}, accepted: number[] = []): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase();
   const headers = new Headers(init.headers);
   if (init.body !== undefined && !(init.body instanceof FormData)) {
@@ -602,7 +628,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const text = await response.text();
   const body = text ? JSON.parse(text) : undefined;
-  if (!response.ok) {
+  if (!response.ok && !accepted.includes(response.status)) {
     throw new ApiError(response.status, body?.detail ?? body?.title ?? `Request failed (${response.status})`, body?.code);
   }
   return body as T;
@@ -993,6 +1019,18 @@ export const api = {
     method: 'PATCH',
     ...json(patch),
   }),
+
+  previewImport: (orgId: string, entityId: string, kind: ImportKind, csv: string) =>
+    request<ImportResult>(`/orgs/${orgId}/entities/${entityId}/imports/${kind}/preview`, {
+      method: 'POST',
+      ...json({ csv }),
+    }),
+  runImport: (orgId: string, entityId: string, kind: ImportKind, csv: string) =>
+    request<ImportResult>(
+      `/orgs/${orgId}/entities/${entityId}/imports/${kind}`,
+      { method: 'POST', ...json({ csv }) },
+      [422],
+    ),
 
   cashFlow: (orgId: string, entityId: string, from: string, to: string) =>
     request<CashFlow>(`/orgs/${orgId}/entities/${entityId}/reports/cash-flow?from=${from}&to=${to}`),
