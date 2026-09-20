@@ -18,12 +18,17 @@ public final class BillingModels {
     }
 
     public record InvoiceLine(UUID id, int lineNo, String description, BigDecimal quantity, Money unitPrice,
-                              Money amount, UUID incomeAccountId) {
+                              Money amount, UUID incomeAccountId, UUID taxRateId, Money taxAmount) {
     }
 
+    /**
+     * @param total   what the customer owes: the lines plus any sales tax
+     * @param taxTotal sales tax charged — money held for the state, never income
+     */
     public record Invoice(UUID id, UUID entityId, UUID customerId, String invoiceNumber, LocalDate issueDate,
                           LocalDate dueDate, String terms, String memo, Money total, Money amountPaid,
-                          Money balanceDue, String status, UUID journalEntryId, List<InvoiceLine> lines) {
+                          Money balanceDue, String status, UUID journalEntryId, List<InvoiceLine> lines,
+                          Money taxTotal) {
     }
 
     public record PaymentApplication(UUID invoiceId, Money amount) {

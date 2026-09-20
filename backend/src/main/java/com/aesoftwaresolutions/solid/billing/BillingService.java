@@ -12,6 +12,8 @@ import com.aesoftwaresolutions.solid.money.Money;
 import com.aesoftwaresolutions.solid.org.LegalEntity;
 import com.aesoftwaresolutions.solid.org.OrgService;
 import com.aesoftwaresolutions.solid.platform.OrgScope;
+import com.aesoftwaresolutions.solid.salestax.SalesTaxModels;
+import com.aesoftwaresolutions.solid.salestax.SalesTaxService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -27,7 +29,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class BillingService {
 
-    public record NewLine(String description, BigDecimal quantity, Money unitPrice, UUID incomeAccountId) {
+    /** @param taxRateId optional sales-tax rate for this line; null means no tax is charged on it */
+    public record NewLine(String description, BigDecimal quantity, Money unitPrice, UUID incomeAccountId,
+                          UUID taxRateId) {
     }
 
     public record NewApplication(UUID invoiceId, Money amount) {
@@ -38,13 +42,16 @@ public class BillingService {
     private final OrgService orgs;
     private final AccountService accounts;
     private final JournalService journal;
+    private final SalesTaxService salesTax;
 
-    BillingService(JdbcClient db, OrgScope orgScope, OrgService orgs, AccountService accounts, JournalService journal) {
+    BillingService(JdbcClient db, OrgScope orgScope, OrgService orgs, AccountService accounts, JournalService journal,
+                   SalesTaxService salesTax) {
         this.db = db;
         this.orgScope = orgScope;
         this.orgs = orgs;
         this.accounts = accounts;
         this.journal = journal;
+        this.salesTax = salesTax;
     }
 
     // ---------------- customers ----------------
@@ -86,7 +93,7 @@ public class BillingService {
                     .params(id, orgId, entityId, customerId, number, issueDate, dueDate, terms, memo,
                             entity.baseCurrency())
                     .update();
-            replaceLines(orgId, entityId, entity.baseCurrency(), id, lines);
+            replaceLines(orgId, entityId, entity.baseCurrency(), id, issueDate, lines);
             return loadInvoice(entityId, id);
         });
     }
@@ -101,7 +108,7 @@ public class BillingService {
             db.sql("update ar_ap.invoice set customer_id = ?, issue_date = ?, due_date = ?, terms = ?, memo = ? where id = ?")
                     .params(customerId, issueDate, dueDate(issueDate, terms), terms, memo, invoiceId).update();
             db.sql("delete from ar_ap.invoice_line where invoice_id = ?").param(invoiceId).update();
-            replaceLines(orgId, entityId, entity.baseCurrency(), invoiceId, lines);
+            replaceLines(orgId, entityId, entity.baseCurrency(), invoiceId, issueDate, lines);
             return loadInvoice(entityId, invoiceId);
         });
     }
@@ -150,6 +157,12 @@ public class BillingService {
             journalLines.add(new JournalService.NewLine(receivable.id(), invoice.total(), null));
             for (BillingModels.InvoiceLine line : invoice.lines()) {
                 journalLines.add(new JournalService.NewLine(line.incomeAccountId(), line.amount().negate(), line.description()));
+                if (line.taxRateId() != null && line.taxAmount().isPositive()) {
+                    // Sales tax is credited to its liability account, never to income: it is the state's money.
+                    SalesTaxModels.Rate rate = salesTax.get(orgId, entityId, line.taxRateId());
+                    journalLines.add(new JournalService.NewLine(rate.liabilityAccountId(),
+                            line.taxAmount().negate(), "Sales tax " + rate.jurisdiction()));
+                }
             }
             JournalEntry entry = journal.postFromSource(orgId, entityId, invoice.issueDate(),
                     "Invoice " + invoice.invoiceNumber(), journalLines, "invoice", invoiceId);
@@ -297,11 +310,13 @@ public class BillingService {
                 Money.ofMinor(total, ccy));
     }
 
-    private void replaceLines(UUID orgId, UUID entityId, String currency, UUID invoiceId, List<NewLine> lines) {
+    private void replaceLines(UUID orgId, UUID entityId, String currency, UUID invoiceId, LocalDate issueDate,
+                              List<NewLine> lines) {
         if (lines == null || lines.isEmpty()) {
             throw new IllegalArgumentException("An invoice needs at least one line");
         }
         Money total = Money.zero(currency);
+        Money tax = Money.zero(currency);
         int lineNo = 1;
         for (NewLine line : lines) {
             if (line.quantity().signum() <= 0 || line.quantity().scale() > 4) {
@@ -319,16 +334,28 @@ public class BillingService {
                         "Invoice lines must use an active, non-header income account");
             }
             Money amount = line.unitPrice().multiply(line.quantity(), RoundingMode.HALF_UP);
+            // Sales tax is worked out per line, on this line's amount, and kept separate from it: it is the
+            // state's money, not income.
+            Money lineTax = Money.zero(currency);
+            if (line.taxRateId() != null) {
+                lineTax = salesTax.chargeFor(orgId, entityId, line.taxRateId(), amount, issueDate).tax();
+                tax = tax.add(lineTax);
+            }
             total = total.add(amount);
             db.sql("""
                     insert into ar_ap.invoice_line (id, org_id, invoice_id, line_no, description, quantity,
-                                                    unit_price_minor, amount_minor, income_account_id)
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?)""")
+                                                    unit_price_minor, amount_minor, income_account_id,
+                                                    tax_rate_id, tax_amount_minor)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""")
                     .params(Ids.newId(), orgId, invoiceId, lineNo++, line.description().trim(), line.quantity(),
-                            line.unitPrice().minorUnits(), amount.minorUnits(), line.incomeAccountId())
+                            line.unitPrice().minorUnits(), amount.minorUnits(), line.incomeAccountId(),
+                            line.taxRateId(), lineTax.minorUnits())
                     .update();
         }
-        db.sql("update ar_ap.invoice set total_minor = ? where id = ?").params(total.minorUnits(), invoiceId).update();
+        // What the customer owes is the lines plus the tax; the tax is kept separately so the ledger and the
+        // sales-tax report can tell them apart.
+        db.sql("update ar_ap.invoice set total_minor = ?, tax_total_minor = ? where id = ?")
+                .params(total.add(tax).minorUnits(), tax.minorUnits(), invoiceId).update();
     }
 
     private Account receivableAccount(UUID orgId, UUID entityId) {
@@ -393,7 +420,7 @@ public class BillingService {
     private BillingModels.Invoice loadInvoice(UUID entityId, UUID invoiceId) {
         Map<String, Object> row = db.sql("""
                 select id, entity_id, customer_id, invoice_number, issue_date, due_date, terms, memo, total_minor,
-                       currency, status, journal_entry_id,
+                       tax_total_minor, currency, status, journal_entry_id,
                        coalesce((select sum(amount_minor) from ar_ap.payment_application where invoice_id = ar_ap.invoice.id), 0) as paid_minor
                 from ar_ap.invoice where entity_id = ? and id = ?""")
                 .params(entityId, invoiceId).query().listOfRows().stream().findFirst()
@@ -402,19 +429,23 @@ public class BillingService {
         Money total = Money.ofMinor(((Number) row.get("total_minor")).longValue(), currency);
         Money paid = Money.ofMinor(((Number) row.get("paid_minor")).longValue(), currency);
         List<BillingModels.InvoiceLine> lines = db.sql("""
-                select id, line_no, description, quantity, unit_price_minor, amount_minor, income_account_id
+                select id, line_no, description, quantity, unit_price_minor, amount_minor, income_account_id,
+                       tax_rate_id, tax_amount_minor
                 from ar_ap.invoice_line where invoice_id = ? order by line_no""")
                 .param(invoiceId)
                 .query((rs, n) -> new BillingModels.InvoiceLine(rs.getObject("id", UUID.class), rs.getInt("line_no"),
                         rs.getString("description"), rs.getBigDecimal("quantity"),
                         Money.ofMinor(rs.getLong("unit_price_minor"), currency),
                         Money.ofMinor(rs.getLong("amount_minor"), currency),
-                        rs.getObject("income_account_id", UUID.class)))
+                        rs.getObject("income_account_id", UUID.class),
+                        rs.getObject("tax_rate_id", UUID.class),
+                        Money.ofMinor(rs.getLong("tax_amount_minor"), currency)))
                 .list();
+        Money taxTotal = Money.ofMinor(((Number) row.get("tax_total_minor")).longValue(), currency);
         return new BillingModels.Invoice((UUID) row.get("id"), (UUID) row.get("entity_id"), (UUID) row.get("customer_id"),
                 (String) row.get("invoice_number"), date(row.get("issue_date")), date(row.get("due_date")),
                 (String) row.get("terms"), (String) row.get("memo"), total, paid, total.subtract(paid),
-                (String) row.get("status"), (UUID) row.get("journal_entry_id"), lines);
+                (String) row.get("status"), (UUID) row.get("journal_entry_id"), lines, taxTotal);
     }
 
     private BillingModels.Payment loadPayment(UUID entityId, UUID paymentId) {

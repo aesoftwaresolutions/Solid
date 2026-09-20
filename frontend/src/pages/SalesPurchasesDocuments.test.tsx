@@ -55,6 +55,8 @@ describe('spec 017 AC 1-3: sales', () => {
       [`GET ${base}/customers`]: [customer],
       [`GET ${base}/invoices`]: () => invoices,
       [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
+      [`GET ${base}/sales-tax-rates`]: [],
+      [`GET ${base}/reports/sales-tax`]: { from: '2026-01-01', to: '2026-09-19', currency: 'USD', jurisdictions: [], totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note' },
       [`POST ${base}/invoices`]: () => {
         invoices = [draft];
         return draft;
@@ -109,6 +111,8 @@ describe('spec 017 AC 1-3: sales', () => {
         [`GET ${base}/customers`]: [customer],
         [`GET ${base}/invoices`]: [draft],
         [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
+        [`GET ${base}/sales-tax-rates`]: [],
+        [`GET ${base}/reports/sales-tax`]: { from: '2026-01-01', to: '2026-09-19', currency: 'USD', jurisdictions: [], totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note' },
         [`POST ${base}/invoices/i1/finalize`]: { detail: 'The period is locked', code: 'PERIOD_LOCKED', status: 409 },
       },
       { status: { [`POST ${base}/invoices/i1/finalize`]: 409 } },
@@ -258,5 +262,68 @@ describe('spec 017 AC 6-7: documents', () => {
     await user.selectOptions(screen.getByLabelText('Show'), 'w2');
 
     await waitFor(() => expect(calls.filter((c) => c.key === `GET ${base}/documents`).length).toBeGreaterThan(1));
+  });
+});
+
+describe('spec 037: sales tax on the sales page', () => {
+  const customer = { id: 'c1', name: 'Acme LLC', email: null, phone: null, isArchived: false };
+  const liability = {
+    id: 'a-2200', code: '2200', name: 'Sales Tax Payable', type: 'liability', subtype: 'sales_tax',
+    parentId: null, isHeader: false, taxLineCode: null, isArchived: false,
+  };
+  const rate = {
+    id: 'r1', jurisdiction: 'Springfield, IL', ratePercent: '8.2500', liabilityAccountId: 'a-2200',
+    effectiveFrom: '2026-01-01', effectiveTo: null, note: 'State DOR page, checked in January.', active: true,
+  };
+
+  test('adds a rate, charges it on a line and shows what has been collected', async () => {
+    const user = userEvent.setup();
+    let rates: unknown[] = [];
+    const { calls } = mockApi({
+      [`GET ${base}/accounts`]: [...accounts, liability],
+      [`GET ${base}/customers`]: [customer],
+      [`GET ${base}/invoices`]: [],
+      [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
+      [`GET ${base}/sales-tax-rates`]: () => rates,
+      [`GET ${base}/reports/sales-tax`]: {
+        from: '2026-01-01', to: '2026-09-19', currency: 'USD',
+        jurisdictions: [{ jurisdiction: 'Springfield, IL', ratePercent: '8.2500', taxableSales: money('1000.00'), taxCollected: money('82.50') }],
+        totalTaxable: money('1000.00'), totalCollected: money('82.50'),
+        note: 'Tax collected is money you are holding for the state, not income.',
+      },
+      [`POST ${base}/sales-tax-rates`]: () => {
+        rates = [rate];
+        return rate;
+      },
+      [`POST ${base}/invoices`]: { ...{ id: 'i9', customerId: 'c1', invoiceNumber: null, issueDate: '2026-09-01', dueDate: '2026-10-01', terms: 'net_30', memo: null, total: money('1082.50'), amountPaid: money('0.00'), balanceDue: money('1082.50'), status: 'draft', lines: [] } },
+    });
+
+    renderAt('/orgs/o1/entities/e1/sales', '/orgs/:orgId/entities/:entityId/sales', <SalesPage />);
+
+    expect(await screen.findByText(/Solid does not know your rates/)).toBeInTheDocument();
+    expect(screen.getByText(/holding for the state/)).toBeInTheDocument();
+    expect(screen.getByText('82.50')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Jurisdiction'), 'Springfield, IL');
+    await user.type(screen.getByLabelText('Rate percent'), '8.25');
+    await user.type(screen.getByLabelText('Where this rate came from'), 'State DOR page');
+    await user.click(screen.getByRole('button', { name: 'Add rate' }));
+
+    expect(calls.find((c) => c.key === `POST ${base}/sales-tax-rates`)?.body).toMatchObject({
+      jurisdiction: 'Springfield, IL',
+      ratePercent: '8.25',
+      liabilityAccountId: 'a-2200',
+      note: 'State DOR page',
+    });
+
+    await waitFor(() => expect(screen.getByLabelText('Sales tax')).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Sales tax'), 'r1');
+    await user.type(screen.getByLabelText('Description'), 'Consulting');
+    await user.type(screen.getByLabelText('Unit price'), '1000.00');
+    await user.click(screen.getByRole('button', { name: 'Create draft invoice' }));
+
+    await waitFor(() => expect(calls.some((c) => c.key === `POST ${base}/invoices`)).toBe(true));
+    const created = calls.find((c) => c.key === `POST ${base}/invoices`)?.body as { lines: { taxRateId?: string }[] };
+    expect(created.lines[0].taxRateId).toBe('r1');
   });
 });

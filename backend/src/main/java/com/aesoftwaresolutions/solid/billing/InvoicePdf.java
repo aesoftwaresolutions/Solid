@@ -88,6 +88,10 @@ final class InvoicePdf {
                 y -= LINE / 2f;
                 rule(content, MARGIN + 320, right, y + 8);
                 y -= LINE / 2f;
+                if (invoice.taxTotal().isPositive()) {
+                    total(content, regular, bold, right, y, "Sales tax", invoice.taxTotal());
+                    y -= LINE;
+                }
                 total(content, regular, bold, right, y, "Total", invoice.total());
                 y -= LINE;
                 total(content, regular, bold, right, y, "Paid", invoice.amountPaid());

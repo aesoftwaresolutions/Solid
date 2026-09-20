@@ -40,5 +40,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 034 | Reconciliation screen | [034](034-reconciliation-screen.md) | Done (owner review) | 009, 011 |
 | 035 | Fixed assets and deduction screens | [035](035-assets-and-deductions-screens.md) | Done (owner + CPA review) | 014, 015 |
 | 036 | Year-end checklist | [036](036-year-end-checklist.md) | Done (owner + CPA review) | 009, 010, 013, 014, 021 |
+| 037 | Sales tax on invoices | [037](037-sales-tax.md) | Done (owner + CPA review) | 012 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

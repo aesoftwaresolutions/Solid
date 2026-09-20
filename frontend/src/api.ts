@@ -526,6 +526,27 @@ export interface YearEndChecklist {
   }[];
 }
 
+export interface SalesTaxRate {
+  id: string;
+  jurisdiction: string;
+  ratePercent: string;
+  liabilityAccountId: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  note: string | null;
+  active: boolean;
+}
+
+export interface SalesTaxReport {
+  from: string;
+  to: string;
+  currency: string;
+  jurisdictions: { jurisdiction: string; ratePercent: string; taxableSales: Money; taxCollected: Money }[];
+  totalTaxable: Money;
+  totalCollected: Money;
+  note: string;
+}
+
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
 export class ApiError extends Error {
   readonly status: number;
@@ -642,7 +663,7 @@ export const api = {
       issueDate: string;
       terms: string;
       memo?: string;
-      lines: { description: string; quantity: string; unitPrice: Money; incomeAccountId: string }[];
+      lines: { description: string; quantity: string; unitPrice: Money; incomeAccountId: string; taxRateId?: string }[];
     },
   ) => request<Invoice>(`/orgs/${orgId}/entities/${entityId}/invoices`, { method: 'POST', ...json(body) }),
   finalizeInvoice: (orgId: string, entityId: string, invoiceId: string) =>
@@ -919,6 +940,21 @@ export const api = {
 
   yearEndChecklist: (orgId: string, entityId: string, taxYear: number) =>
     request<YearEndChecklist>(`/orgs/${orgId}/entities/${entityId}/reports/year-end-checklist?taxYear=${taxYear}`),
+
+  salesTaxRates: (orgId: string, entityId: string) =>
+    request<SalesTaxRate[]>(`/orgs/${orgId}/entities/${entityId}/sales-tax-rates`),
+  createSalesTaxRate: (
+    orgId: string,
+    entityId: string,
+    body: { jurisdiction: string; ratePercent: string; liabilityAccountId: string; effectiveFrom: string; note?: string },
+  ) => request<SalesTaxRate>(`/orgs/${orgId}/entities/${entityId}/sales-tax-rates`, { method: 'POST', ...json(body) }),
+  deactivateSalesTaxRate: (orgId: string, entityId: string, rateId: string) =>
+    request<SalesTaxRate>(`/orgs/${orgId}/entities/${entityId}/sales-tax-rates/${rateId}/deactivate`, {
+      method: 'POST',
+      ...json({}),
+    }),
+  salesTaxReport: (orgId: string, entityId: string, from: string, to: string) =>
+    request<SalesTaxReport>(`/orgs/${orgId}/entities/${entityId}/reports/sales-tax?from=${from}&to=${to}`),
 
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),

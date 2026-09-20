@@ -32,7 +32,7 @@ class BillingController {
     }
 
     record LineRequest(@NotBlank @Size(max = 300) String description, @NotNull BigDecimal quantity,
-                       @NotNull Money unitPrice, @NotNull UUID incomeAccountId) {
+                       @NotNull Money unitPrice, @NotNull UUID incomeAccountId, UUID taxRateId) {
     }
 
     record InvoiceRequest(@NotNull UUID customerId, @NotNull LocalDate issueDate,
@@ -142,7 +142,8 @@ class BillingController {
 
     private static List<BillingService.NewLine> lines(InvoiceRequest body) {
         return body.lines().stream()
-                .map(l -> new BillingService.NewLine(l.description(), l.quantity(), l.unitPrice(), l.incomeAccountId()))
+                .map(l -> new BillingService.NewLine(l.description(), l.quantity(), l.unitPrice(), l.incomeAccountId(),
+                        l.taxRateId()))
                 .toList();
     }
 }

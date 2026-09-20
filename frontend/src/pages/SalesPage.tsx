@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, formatMoney, type Account, type Invoice } from '../api';
+import { api, formatMoney, type Account, type Invoice, type SalesTaxRate } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
 
 const TERMS = ['due_on_receipt', 'net_15', 'net_30', 'net_60'];
@@ -13,6 +13,11 @@ export default function SalesPage() {
   const customers = useLoader(() => api.customers(orgId, entityId), [orgId, entityId]);
   const invoices = useLoader(() => api.invoices(orgId, entityId), [orgId, entityId]);
   const aging = useLoader(() => api.arAging(orgId, entityId, today()), [orgId, entityId]);
+  const taxRates = useLoader(() => api.salesTaxRates(orgId, entityId), [orgId, entityId]);
+  const taxReport = useLoader(
+    () => api.salesTaxReport(orgId, entityId, `${new Date().getFullYear()}-01-01`, today()),
+    [orgId, entityId],
+  );
 
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
@@ -73,6 +78,7 @@ export default function SalesPage() {
             entityId={entityId}
             customers={customers.value}
             incomeAccounts={incomeAccounts}
+            taxRates={(taxRates.value ?? []).filter((rate) => rate.active)}
             onCreated={() => {
               invoices.reload();
               aging.reload();
@@ -158,6 +164,78 @@ export default function SalesPage() {
         </Card>
       )}
 
+      <Card title="Sales tax">
+        <ErrorMessage error={taxRates.error} />
+        <p className="muted">
+          Solid does not know your rates — enter the ones you charge, with a note saying where you got them.
+        </p>
+        <NewTaxRate
+          orgId={orgId}
+          entityId={entityId}
+          liabilityAccounts={postable.filter((a) => a.type === 'liability')}
+          onCreated={taxRates.reload}
+        />
+        {taxRates.value && taxRates.value.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Jurisdiction</th>
+                <th>Rate</th>
+                <th>From</th>
+                <th>State</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {taxRates.value.map((rate) => (
+                <tr key={rate.id}>
+                  <td>{rate.jurisdiction}</td>
+                  <td>{rate.ratePercent}%</td>
+                  <td>{rate.effectiveFrom}</td>
+                  <td>{rate.active ? 'in use' : 'retired'}</td>
+                  <td>
+                    {rate.active && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => act(api.deactivateSalesTaxRate(orgId, entityId, rate.id).then(taxRates.reload))}
+                      >
+                        Retire
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {taxReport.value && taxReport.value.jurisdictions.length > 0 && (
+          <>
+            <h3>Collected this year</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Jurisdiction</th>
+                  <th className="money">Taxable sales</th>
+                  <th className="money">Tax collected</th>
+                </tr>
+              </thead>
+              <tbody>
+                {taxReport.value.jurisdictions.map((row) => (
+                  <tr key={row.jurisdiction}>
+                    <td>{row.jurisdiction}</td>
+                    <td className="money">{formatMoney(row.taxableSales)}</td>
+                    <td className="money">{formatMoney(row.taxCollected)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="muted">{taxReport.value.note}</p>
+          </>
+        )}
+      </Card>
+
       <Card title="Who owes you">
         <ErrorMessage error={aging.error} />
         {!aging.value && !aging.error && <Loading what="aging" />}
@@ -238,12 +316,14 @@ function NewInvoice({
   entityId,
   customers,
   incomeAccounts,
+  taxRates,
   onCreated,
 }: {
   orgId: string;
   entityId: string;
   customers: { id: string; name: string }[];
   incomeAccounts: Account[];
+  taxRates: SalesTaxRate[];
   onCreated: () => void;
 }) {
   const [customerId, setCustomerId] = useState(customers[0].id);
@@ -253,6 +333,7 @@ function NewInvoice({
   const [quantity, setQuantity] = useState('1');
   const [unitPrice, setUnitPrice] = useState('');
   const [incomeAccountId, setIncomeAccountId] = useState(incomeAccounts[0].id);
+  const [taxRateId, setTaxRateId] = useState('');
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
 
@@ -273,6 +354,7 @@ function NewInvoice({
                 quantity,
                 unitPrice: { amount: unitPrice, currency: 'USD' },
                 incomeAccountId,
+                taxRateId: taxRateId || undefined,
               },
             ],
           })
@@ -334,6 +416,17 @@ function NewInvoice({
           {incomeAccounts.map((account) => (
             <option key={account.id} value={account.id}>
               {account.code} {account.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Sales tax
+        <select value={taxRateId} onChange={(e) => setTaxRateId(e.target.value)}>
+          <option value="">none</option>
+          {taxRates.map((rate) => (
+            <option key={rate.id} value={rate.id}>
+              {rate.jurisdiction} {rate.ratePercent}%
             </option>
           ))}
         </select>
@@ -409,6 +502,90 @@ function RecordPayment({
       </label>
       <button type="submit" disabled={busy}>
         Save payment
+      </button>
+    </form>
+  );
+}
+
+function NewTaxRate({
+  orgId,
+  entityId,
+  liabilityAccounts,
+  onCreated,
+}: {
+  orgId: string;
+  entityId: string;
+  liabilityAccounts: Account[];
+  onCreated: () => void;
+}) {
+  const [jurisdiction, setJurisdiction] = useState('');
+  const [ratePercent, setRatePercent] = useState('');
+  const [chosenAccountId, setChosenAccountId] = useState('');
+  // The accounts arrive after this form first renders, so fall back to the first one rather than sending an
+  // empty account id.
+  const liabilityAccountId = chosenAccountId || liabilityAccounts[0]?.id || '';
+  const [effectiveFrom, setEffectiveFrom] = useState(`${new Date().getFullYear()}-01-01`);
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<unknown>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  if (liabilityAccounts.length === 0) {
+    return <p className="muted">Add a liability account (for example "Sales Tax Payable") first.</p>;
+  }
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError(undefined);
+        api
+          .createSalesTaxRate(orgId, entityId, {
+            jurisdiction: jurisdiction.trim(),
+            ratePercent: ratePercent.trim(),
+            liabilityAccountId,
+            effectiveFrom,
+            note: note.trim() || undefined,
+          })
+          .then(() => {
+            setJurisdiction('');
+            setRatePercent('');
+            setNote('');
+            onCreated();
+          })
+          .catch(setError)
+          .finally(() => setBusy(false));
+      }}
+    >
+      <ErrorMessage error={error} />
+      <label>
+        Jurisdiction
+        <input value={jurisdiction} required maxLength={120} onChange={(e) => setJurisdiction(e.target.value)} />
+      </label>
+      <label>
+        Rate percent
+        <input value={ratePercent} required inputMode="decimal" placeholder="8.25" onChange={(e) => setRatePercent(e.target.value)} />
+      </label>
+      <label>
+        Owed to
+        <select value={liabilityAccountId} onChange={(e) => setChosenAccountId(e.target.value)}>
+          {liabilityAccounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.code} {account.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Effective from
+        <input type="date" value={effectiveFrom} required onChange={(e) => setEffectiveFrom(e.target.value)} />
+      </label>
+      <label>
+        Where this rate came from
+        <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
+      </label>
+      <button type="submit" disabled={busy}>
+        Add rate
       </button>
     </form>
   );
