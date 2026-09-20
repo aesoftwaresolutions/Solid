@@ -119,6 +119,22 @@ class InvoicePdfTests {
     }
 
     @Test
+    void aLongInvoiceKeepsEveryLineAndItsTotal() throws IOException {
+        List<Map<String, Object>> lines = new java.util.ArrayList<>();
+        for (int i = 1; i <= 60; i++) {
+            lines.add(Map.of("description", "Line item " + i, "quantity", "1",
+                    "unitPrice", Map.of("amount", "10.00", "currency", "USD"),
+                    "incomeAccountId", acct.get("4010")));
+        }
+        String invoiceId = api.post(base + "/invoices", Map.of("customerId", customerId, "issueDate", "2026-03-01",
+                "terms", "net_30", "lines", lines), HttpStatus.CREATED).get("id").asText();
+
+        String text = textOf(download(invoiceId, api.token()).getBody());
+        assertThat(text).contains("Line item 1").contains("Line item 60")
+                .as("the totals block must not fall off the page").contains("Amount due").contains("600.00");
+    }
+
+    @Test
     void ac5_accessIsScoped() {
         String invoiceId = invoice("Website build", "1", "1500.00").get("id").asText();
 

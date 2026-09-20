@@ -34,7 +34,11 @@ final class Csv {
             return "";
         }
         String text = String.valueOf(value);
-        if (!text.isEmpty() && "=+-@".indexOf(text.charAt(0)) >= 0) {
+        // A leading = + - or @ can be run as a formula, so it is escaped — except for a plain negative number,
+        // which must stay a number or every credit in the file becomes text a spreadsheet will not add up.
+        boolean looksLikeFormula = !text.isEmpty() && "=+-@".indexOf(text.charAt(0)) >= 0
+                && !text.matches("-?\\d+(\\.\\d+)?");
+        if (looksLikeFormula) {
             text = "'" + text;
         }
         boolean needsQuotes = text.contains(",") || text.contains("\"") || text.contains("\n") || text.contains("\r");

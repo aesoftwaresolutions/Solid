@@ -16,7 +16,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 /** Spec 026. */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
@@ -82,6 +86,36 @@ class RecurringApiTests {
             }
         }
         assertThat(fromRecurring).isEqualTo(5);
+    }
+
+    @Test
+    void eachOccurrenceCarriesAnIdempotencyKeySoAConcurrentRunCannotDoublePost() {
+        String templateId = api.post(base + "/recurring-entries",
+                template("Rent", "monthly", "2026-01-15", 15, "1200.00"), HttpStatus.CREATED).get("id").asText();
+        assertThat(run("2026-01-31")).containsExactly("2026-01-15");
+
+        JsonNode entries = api.get(base + "/journal-entries?from=2026-01-01&to=2026-01-31");
+        assertThat(entries).hasSize(1);
+        String postedId = entries.get(0).get("id").asText();
+
+        // Posting anything under that occurrence's key returns the entry already booked instead of a second one.
+        // That is what stops two runs at the same moment (or a retry after a crash) from booking the rent twice.
+        Map<String, Object> other = new HashMap<>();
+        other.put("entryDate", "2026-01-15");
+        other.put("post", true);
+        other.put("lines", List.of(
+                Map.of("accountId", acct.get("6010"), "amount", money("1.00")),
+                Map.of("accountId", acct.get("1010"), "amount", money("-1.00"))));
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(api.token());
+        headers.set("Idempotency-Key", "recurring:" + templateId + ":2026-01-15");
+        ResponseEntity<JsonNode> replay = rest.exchange(base + "/journal-entries", HttpMethod.POST,
+                new HttpEntity<>(other, headers), JsonNode.class);
+
+        assertThat(replay.getStatusCode()).as("replayed, not created").isEqualTo(HttpStatus.OK);
+        assertThat(replay.getBody().get("id").asText()).isEqualTo(postedId);
+        assertThat(api.get(base + "/journal-entries?from=2026-01-01&to=2026-01-31")).hasSize(1);
     }
 
     @Test

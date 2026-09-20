@@ -52,12 +52,6 @@ public class OpeningBalanceService {
         LegalEntity entity = orgs.getEntity(orgId, entityId);
         String ccy = entity.baseCurrency();
 
-        existing(orgId, entityId).ifPresent(entry -> {
-            throw new BusinessRuleException("OPENING_BALANCES_EXIST",
-                    "This entity already has opening balances (entry " + entry.id() + " dated " + entry.entryDate()
-                            + "). Reverse that entry first if the figures were wrong.");
-        });
-
         List<Account> postable = accounts.list(orgId, entityId).stream()
                 .filter(account -> !account.isHeader() && !account.isArchived())
                 .toList();
@@ -97,7 +91,18 @@ public class OpeningBalanceService {
             lines.add(new JournalService.NewLine(equity.id(), Money.ofMinor(-plug, ccy), "Opening equity"));
         }
 
-        return journal.postFromSource(orgId, entityId, asOfDate, "Opening balances", lines, SOURCE, null);
+        List<JournalService.NewLine> toPost = List.copyOf(lines);
+        // The check and the posting share one transaction, with the entity row locked, so a double-clicked
+        // "Save" cannot post two sets of opening balances — which would silently double the opening equity.
+        return orgScope.call(orgId, () -> {
+            db.sql("select id from org.entity where id = ? for update").param(entityId).query(UUID.class).single();
+            existingInScope(entityId).ifPresent(entry -> {
+                throw new BusinessRuleException("OPENING_BALANCES_EXIST",
+                        "This entity already has opening balances (entry " + entry.get("id") + " dated "
+                                + entry.get("entry_date") + "). Reverse that entry first if the figures were wrong.");
+            });
+            return journal.postFromSource(orgId, entityId, asOfDate, "Opening balances", toPost, SOURCE, null);
+        });
     }
 
     public JournalEntry get(UUID orgId, UUID entityId) {
@@ -108,13 +113,19 @@ public class OpeningBalanceService {
     /** The opening-balance entry that still stands: one that exists and has not been reversed. */
     private Optional<JournalEntry> existing(UUID orgId, UUID entityId) {
         orgs.getEntity(orgId, entityId);
-        Optional<UUID> id = orgScope.call(orgId, () -> db.sql("""
-                select e.id from gl.journal_entry e
+        Optional<UUID> id = orgScope.call(orgId, () ->
+                existingInScope(entityId).map(row -> (UUID) row.get("id")));
+        return id.map(value -> journal.get(orgId, entityId, value));
+    }
+
+    /** Must run inside {@link OrgScope}; returns the id and date without loading the whole entry. */
+    private Optional<java.util.Map<String, Object>> existingInScope(UUID entityId) {
+        return db.sql("""
+                select e.id, e.entry_date from gl.journal_entry e
                 where e.entity_id = ? and e.source = ? and e.status = 'posted'
                   and not exists (select 1 from gl.journal_entry r where r.reverses_entry_id = e.id)
                 order by e.entry_date limit 1""")
-                .params(entityId, SOURCE).query(UUID.class).optional());
-        return id.map(value -> journal.get(orgId, entityId, value));
+                .params(entityId, SOURCE).query().listOfRows().stream().findFirst();
     }
 
     private static boolean naturallyDebit(AccountType type) {

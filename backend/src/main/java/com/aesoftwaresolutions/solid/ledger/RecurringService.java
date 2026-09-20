@@ -140,25 +140,37 @@ public class RecurringService {
             if (!template.active()) {
                 continue;
             }
-            for (LocalDate date : dueDates(template, through)) {
-                boolean alreadyPosted = orgScope.call(orgId, () -> db.sql("""
-                        select count(*) from gl.recurring_occurrence where recurring_id = ? and occurrence_date = ?""")
-                        .params(template.id(), date).query(Long.class).single() > 0);
-                if (alreadyPosted) {
-                    continue;
-                }
+            LocalDate lastPosted = orgScope.call(orgId, () -> db.sql(
+                    "select max(occurrence_date) from gl.recurring_occurrence where recurring_id = ?")
+                    .param(template.id()).query(LocalDate.class).optional().orElse(null));
+            for (LocalDate date : dueDates(template, through, lastPosted)) {
                 List<JournalService.NewLine> lines = template.lines().stream()
                         .map(line -> new JournalService.NewLine(line.accountId(), line.amount(), line.memo()))
                         .toList();
                 try {
-                    JournalEntry entry = journal.postFromSource(orgId, entityId, date,
-                            template.memo() == null ? template.name() : template.memo(), lines, "recurring",
-                            template.id());
-                    orgScope.run(orgId, () -> db.sql("""
-                            insert into gl.recurring_occurrence (recurring_id, occurrence_date, journal_entry_id, org_id)
-                            values (?, ?, ?, ?)""")
-                            .params(template.id(), date, entry.id(), orgId).update());
-                    posted.add(new RecurringModels.Posted(date, entry.id()));
+                    // The check, the posting and the occurrence row are one transaction, and the journal's own
+                    // idempotency key makes a second attempt return the first entry instead of posting again.
+                    // Two runs at the same moment therefore cannot both book the rent.
+                    Optional<JournalEntry> entry = orgScope.call(orgId, () -> {
+                        boolean alreadyPosted = db.sql("""
+                                select count(*) from gl.recurring_occurrence
+                                where recurring_id = ? and occurrence_date = ?""")
+                                .params(template.id(), date).query(Long.class).single() > 0;
+                        if (alreadyPosted) {
+                            return Optional.empty();
+                        }
+                        JournalEntry booked = journal.create(orgId, entityId, date,
+                                template.memo() == null ? template.name() : template.memo(), true, lines,
+                                "recurring:" + template.id() + ":" + date, "recurring", template.id(), null).entry();
+                        db.sql("""
+                                insert into gl.recurring_occurrence (recurring_id, occurrence_date, journal_entry_id,
+                                                                    org_id)
+                                values (?, ?, ?, ?)
+                                on conflict (recurring_id, occurrence_date) do nothing""")
+                                .params(template.id(), date, booked.id(), orgId).update();
+                        return Optional.of(booked);
+                    });
+                    entry.ifPresent(booked -> posted.add(new RecurringModels.Posted(date, booked.id())));
                 } catch (BusinessRuleException e) {
                     // One refused month (a locked period, say) must not stop the others.
                     skipped.add(new RecurringModels.Skipped(date, e.getMessage()));
@@ -172,24 +184,42 @@ public class RecurringService {
 
     /** The occurrence dates from the start date through {@code through}, clamped to each month's length. */
     static List<LocalDate> dueDates(RecurringModels.Recurring template, LocalDate through) {
+        return dueDates(template, through, null);
+    }
+
+    /**
+     * Occurrence dates that are still due: those after {@code after} (the last one posted) and on or before
+     * {@code through}. At most {@link #MAX_OCCURRENCES_PER_RUN} are returned, and because the walk starts from
+     * what is still outstanding rather than from the template's first month, that cap stays a per-run limit
+     * however old the template gets.
+     */
+    static List<LocalDate> dueDates(RecurringModels.Recurring template, LocalDate through, LocalDate after) {
         List<LocalDate> dates = new ArrayList<>();
         int step = switch (template.frequency()) {
             case "monthly" -> 1;
             case "quarterly" -> 3;
             default -> 12;
         };
-        YearMonth month = YearMonth.from(template.startDate());
         LocalDate last = template.endDate() != null && template.endDate().isBefore(through)
                 ? template.endDate() : through;
-        for (int i = 0; i < MAX_OCCURRENCES_PER_RUN; i++) {
+
+        YearMonth month = YearMonth.from(template.startDate());
+        if (after != null) {
+            // Jump straight to the first period after what is already posted, in whole steps from the start.
+            long elapsed = java.time.temporal.ChronoUnit.MONTHS.between(month, YearMonth.from(after));
+            long skip = Math.max(0, (elapsed / step) * step);
+            month = month.plusMonths(skip);
+        }
+        for (int i = 0; i < MAX_OCCURRENCES_PER_RUN * 2 && dates.size() < MAX_OCCURRENCES_PER_RUN; i++) {
             LocalDate date = onDay(month, template.dayOfMonth());
+            month = month.plusMonths(step);
             if (date.isAfter(last)) {
                 break;
             }
-            if (!date.isBefore(template.startDate())) {
-                dates.add(date);
+            if (date.isBefore(template.startDate()) || (after != null && !date.isAfter(after))) {
+                continue;
             }
-            month = month.plusMonths(step);
+            dates.add(date);
         }
         return dates;
     }
@@ -236,10 +266,7 @@ public class RecurringService {
             return null;
         }
         LocalDate horizon = template.endDate() != null ? template.endDate() : LocalDate.of(2100, 1, 1);
-        return dueDates(template, horizon).stream()
-                .filter(date -> lastPosted == null || date.isAfter(lastPosted))
-                .findFirst()
-                .orElse(null);
+        return dueDates(template, horizon, lastPosted).stream().findFirst().orElse(null);
     }
 
     private static LocalDate date(Object value) {

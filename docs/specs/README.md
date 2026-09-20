@@ -36,5 +36,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 030 | Category suggestions from a local model | [030](030-ai-category-suggestions.md) | Done (owner + security review) | 008 |
 | 031 | Invoice PDF | [031](031-invoice-pdf.md) | Done (owner review) | 012 |
 | 032 | Customer statements | [032](032-customer-statements.md) | Done (owner review) | 012, 031 |
+| 033 | Fixes from the security and correctness review | [033](033-review-fixes.md) | Done (security review) | 016-032 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

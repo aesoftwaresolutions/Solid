@@ -200,6 +200,32 @@ class DocumentApiTests {
     }
 
     @Test
+    void aSwappedVaultFileIsRefusedRatherThanServedAsSomeoneElsesPaperwork() throws IOException {
+        JsonNode first = uploadOk("receipt.png", PNG, "receipt");
+        byte[] otherBytes = PNG.clone();
+        otherBytes[20] = 0x7F;
+        JsonNode second = uploadOk("other.png", otherBytes, "receipt");
+
+        List<Path> files = storedFiles();
+        assertThat(files).hasSize(2);
+        Path a = files.stream().filter(p -> p.getFileName().toString().equals(first.get("id").asText()))
+                .findFirst().orElseThrow();
+        Path b = files.stream().filter(p -> p.getFileName().toString().equals(second.get("id").asText()))
+                .findFirst().orElseThrow();
+
+        // Someone (a bad restore, or an attacker with file access) puts one document's ciphertext at another's path.
+        byte[] contentsOfA = Files.readAllBytes(a);
+        Files.write(a, Files.readAllBytes(b));
+        Files.write(b, contentsOfA);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(api.token());
+        ResponseEntity<String> response = rest.exchange(base + "/documents/" + first.get("id").asText() + "/content",
+                HttpMethod.GET, new HttpEntity<>(headers), String.class);
+        assertThat(response.getStatusCode().is2xxSuccessful()).as("the wrong file must never be served").isFalse();
+    }
+
+    @Test
     void ac7_anotherOrganizationCannotSeeTheDocument() {
         String id = uploadOk("receipt.png", PNG, "receipt").get("id").asText();
         ApiClient outsider = new ApiClient(rest);

@@ -170,6 +170,20 @@ class ExportApiTests {
     }
 
     @Test
+    void negativeAmountsStayNumbers() throws IOException {
+        post("2026-03-04", "6220", "1010", "54.99", "Adobe");
+
+        Map<String, String> files = download(base + "/export.zip", HttpStatus.OK);
+        List<List<String>> lines = parse(files.get("journal-lines.csv"));
+        List<String> credit = lines.stream().filter(r -> r.get(2).equals(acct.get("1010"))).findFirst().orElseThrow();
+
+        assertThat(credit.get(3))
+                .as("an apostrophe here would make every credit text a spreadsheet will not add up")
+                .isEqualTo("-54.99");
+        assertThat(files.get("journal-lines.csv")).doesNotContain("'-54.99");
+    }
+
+    @Test
     void ac5_documentsAreMetadataOnly() throws IOException {
         byte[] png = new byte[64];
         System.arraycopy(new byte[]{(byte) 0x89, 'P', 'N', 'G'}, 0, png, 0, 4);

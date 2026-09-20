@@ -130,6 +130,14 @@ public class DocumentService {
                 db.sql("select storage_key from doc.document where entity_id = ? and id = ?")
                         .params(entityId, documentId).query(String.class).single());
         byte[] bytes = store.read(storageKey);
+        // The row already knows what these bytes should be; checking costs nothing and catches a swapped or
+        // half-restored file before it is handed to someone as their tax paperwork.
+        String actual = sha256(bytes);
+        if (!actual.equals(document.sha256())) {
+            throw new ApiProblemException(500, "DOCUMENT_UNREADABLE", "Document " + documentId
+                    + " does not match its stored checksum: the file in the vault has been changed or replaced. "
+                    + "Restore it from a backup (see docs/operations.md).");
+        }
         audit.record(AuditLog.Actor.current(), orgId, "document_downloaded", "document", documentId,
                 Map.of("kind", document.kind(), "sizeBytes", document.sizeBytes()));
         return new DocumentModels.Content(document.filename(), document.contentType(), bytes);

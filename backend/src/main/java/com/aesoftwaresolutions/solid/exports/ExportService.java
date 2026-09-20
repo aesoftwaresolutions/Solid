@@ -21,6 +21,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
@@ -122,7 +123,7 @@ public class ExportService {
     private String entriesCsv(UUID orgId, UUID entityId) {
         StringBuilder csv = new StringBuilder(Csv.row("entry_id", "entry_date", "memo", "source", "status",
                 "reverses_entry_id", "posting_seq", "posted_at"));
-        for (JournalEntry entry : journal.list(orgId, entityId, null, null, null)) {
+        for (JournalEntry entry : allEntries(orgId, entityId)) {
             csv.append(Csv.row(entry.id(), entry.entryDate(), entry.memo(), entry.source(), entry.status(),
                     entry.reversesEntryId(), entry.postingSeq(), entry.postedAt()));
         }
@@ -132,7 +133,7 @@ public class ExportService {
     private String linesCsv(UUID orgId, UUID entityId) {
         StringBuilder csv = new StringBuilder(Csv.row("entry_id", "line_no", "account_id", "amount", "currency",
                 "memo", "entry_date", "status"));
-        for (JournalEntry entry : journal.list(orgId, entityId, null, null, null)) {
+        for (JournalEntry entry : allEntries(orgId, entityId)) {
             for (JournalEntry.Line line : entry.lines()) {
                 csv.append(Csv.row(entry.id(), line.lineNo(), line.accountId(), line.amount().toDecimalString(),
                         line.amount().currency(), line.memo(), entry.entryDate(), entry.status()));
@@ -141,10 +142,17 @@ public class ExportService {
         return csv.toString();
     }
 
+    /** Every entry, with no page limit: an export that silently stopped at 1000 rows would be worse than none. */
+    private List<JournalEntry> allEntries(UUID orgId, UUID entityId) {
+        return journal.allEntryIds(orgId, entityId).stream()
+                .map(id -> journal.get(orgId, entityId, id))
+                .toList();
+    }
+
     private String bankCsv(UUID orgId, UUID entityId) {
         StringBuilder csv = new StringBuilder(Csv.row("bank_transaction_id", "bank_account_id", "posted_date",
                 "description", "amount", "currency", "status", "journal_entry_id"));
-        for (BankModels.BankTransaction txn : bank.listTransactions(orgId, entityId, null, null)) {
+        for (BankModels.BankTransaction txn : bank.allTransactions(orgId, entityId)) {
             csv.append(Csv.row(txn.id(), txn.bankAccountId(), txn.postedDate(), txn.description(),
                     txn.amount().toDecimalString(), txn.amount().currency(), txn.status(), txn.journalEntryId()));
         }

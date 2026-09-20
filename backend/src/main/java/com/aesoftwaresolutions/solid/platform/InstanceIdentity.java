@@ -9,8 +9,6 @@ import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -49,7 +47,11 @@ public class InstanceIdentity {
         }
     }
 
-    @EventListener(ApplicationReadyEvent.class)
+    /**
+     * Runs while the context is still starting — before the HTTP port is open — so a server holding the wrong key
+     * never accepts an upload it would encrypt unreadably.
+     */
+    @jakarta.annotation.PostConstruct
     void verifyOnStartup() {
         verify();
     }

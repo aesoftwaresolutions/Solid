@@ -158,6 +158,14 @@ public class BankService {
                 .query(this::mapTxn).list());
     }
 
+    /** Every imported transaction, oldest first, with no limit — for the export. */
+    public List<BankModels.BankTransaction> allTransactions(UUID orgId, UUID entityId) {
+        orgs.getEntity(orgId, entityId);
+        return orgScope.call(orgId, () -> db.sql(TXN_SELECT + "\n"
+                + "where a.entity_id = ? order by t.posted_date, t.created_at, t.id")
+                .param(entityId).query(this::mapTxn).list());
+    }
+
     /** How many imported transactions still need a category (used by the tax-line readiness check). */
     public int countUncategorized(UUID orgId, UUID entityId) {
         return orgScope.call(orgId, () -> db.sql("""

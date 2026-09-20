@@ -146,6 +146,18 @@ public class JournalService {
         return orgScope.call(orgId, () -> load(entityId, entryId));
     }
 
+    /**
+     * Every entry, oldest first, with no limit — for the export, which must not quietly stop at a page boundary.
+     * Callers get ids and load entries one at a time so nothing large is held in memory at once.
+     */
+    public List<UUID> allEntryIds(UUID orgId, UUID entityId) {
+        orgs.getEntity(orgId, entityId);
+        return orgScope.call(orgId, () -> db.sql("""
+                select id from gl.journal_entry where entity_id = ?
+                order by entry_date, created_at, id""")
+                .param(entityId).query(UUID.class).list());
+    }
+
     public List<JournalEntry> list(UUID orgId, UUID entityId, LocalDate from, LocalDate to, JournalEntry.Status status) {
         orgs.getEntity(orgId, entityId);
         return orgScope.call(orgId, () -> {

@@ -2,6 +2,7 @@ package com.aesoftwaresolutions.solid.billing;
 
 import com.aesoftwaresolutions.solid.money.Money;
 import com.aesoftwaresolutions.solid.org.LegalEntity;
+import java.util.List;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -38,6 +39,7 @@ final class InvoicePdf {
             var bold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
             float right = page.getMediaBox().getWidth() - MARGIN;
 
+            List<BillingModels.InvoiceLine> overflow = List.of();
             try (PDPageContentStream content = new PDPageContentStream(document, page)) {
                 float y = page.getMediaBox().getHeight() - MARGIN;
 
@@ -70,6 +72,12 @@ final class InvoicePdf {
                 y -= LINE / 2f;
 
                 for (BillingModels.InvoiceLine line : invoice.lines()) {
+                    // Keep room for the totals block; a 200-line invoice must not run off the bottom of the page.
+                    if (y < MARGIN + LINE * 8) {
+                        text(content, regular, 9, MARGIN, y, "continued...");
+                        overflow = invoice.lines().subList(invoice.lines().indexOf(line), invoice.lines().size());
+                        break;
+                    }
                     text(content, regular, 10, MARGIN, y, fit(regular, line.description(), DESCRIPTION_WIDTH));
                     text(content, regular, 10, MARGIN + 260, y, line.quantity().stripTrailingZeros().toPlainString());
                     text(content, regular, 10, MARGIN + 320, y, money(line.unitPrice()));
@@ -102,6 +110,35 @@ final class InvoicePdf {
                 }
 
                 text(content, regular, 8, MARGIN, MARGIN, "Prepared with Solid");
+            }
+
+            // Anything that did not fit goes on its own continuation pages, so no charge is ever lost.
+            List<BillingModels.InvoiceLine> remaining = overflow;
+            while (!remaining.isEmpty()) {
+                PDPage next = new PDPage(PDRectangle.LETTER);
+                document.addPage(next);
+                float nextRight = next.getMediaBox().getWidth() - MARGIN;
+                int drawn = 0;
+                try (PDPageContentStream content = new PDPageContentStream(document, next)) {
+                    float y = next.getMediaBox().getHeight() - MARGIN;
+                    text(content, bold, 12, MARGIN, y, "INVOICE " + (invoice.invoiceNumber() == null
+                            ? "(draft)" : invoice.invoiceNumber()) + " — continued");
+                    y -= LINE * 2;
+                    for (BillingModels.InvoiceLine line : remaining) {
+                        if (y < MARGIN + LINE * 2) {
+                            break;
+                        }
+                        text(content, regular, 10, MARGIN, y, fit(regular, line.description(), DESCRIPTION_WIDTH));
+                        text(content, regular, 10, MARGIN + 260, y,
+                                line.quantity().stripTrailingZeros().toPlainString());
+                        text(content, regular, 10, MARGIN + 320, y, money(line.unitPrice()));
+                        textRight(content, regular, 10, nextRight, y, money(line.amount()));
+                        y -= LINE;
+                        drawn++;
+                    }
+                    text(content, regular, 8, MARGIN, MARGIN, "Prepared with Solid");
+                }
+                remaining = remaining.subList(drawn, remaining.size());
             }
 
             String watermark = switch (invoice.status()) {
