@@ -44,5 +44,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 038 | Editing customers and vendors | [038](038-editing-customers-and-vendors.md) | Done (owner review) | 012, 013 |
 | 039 | Statement of cash flows | [039](039-cash-flow-statement.md) | Done (owner + CPA review) | 006 |
 | 040 | Bringing your existing books in (CSV import) | [040](040-csv-import.md) | Done (owner review) | 005, 012, 013 |
+| 041 | The whole organization on one page | [041](041-organization-overview.md) | Done (owner review) | 006, 039 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

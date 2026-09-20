@@ -44,6 +44,15 @@ public class CashFlowService {
         this.orgs = orgs;
     }
 
+    /**
+     * The bank and cash accounts as of a date. The organization overview shows this figure, and it comes from
+     * here so that the two screens can never disagree about how much cash there is.
+     */
+    public Money cashAsOf(UUID orgId, UUID entityId, LocalDate asOf) {
+        LegalEntity entity = orgs.getEntity(orgId, entityId);
+        return orgScope.call(orgId, () -> Money.ofMinor(cashBalance(entityId, asOf), entity.baseCurrency()));
+    }
+
     public Reports.CashFlow cashFlow(UUID orgId, UUID entityId, LocalDate from, LocalDate to) {
         if (from.isAfter(to)) {
             throw new IllegalArgumentException("'from' must be on or before 'to'");

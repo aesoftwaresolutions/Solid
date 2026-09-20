@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api } from '../api';
-import { Card, ErrorMessage, Loading, useLoader } from '../components';
+import { api, formatMoney } from '../api';
+import { Card, ErrorMessage, Loading, MoneyCell, useLoader } from '../components';
 
 const ENTITY_KINDS = [
   ['sole_prop', 'Sole proprietor (Schedule C)'],
@@ -16,6 +16,7 @@ const ENTITY_KINDS = [
 export default function EntitiesPage() {
   const { orgId = '' } = useParams();
   const { value: entities, error, reload } = useLoader(() => api.entities(orgId), [orgId]);
+  const overview = useLoader(() => api.overview(orgId), [orgId]);
   const [legalName, setLegalName] = useState('');
   const [kind, setKind] = useState('sole_prop');
   const [createError, setCreateError] = useState<unknown>(undefined);
@@ -73,6 +74,67 @@ export default function EntitiesPage() {
               </tbody>
             </table>
           )}
+        </Card>
+      )}
+
+      {overview.value && overview.value.entities.length > 0 && (
+        <Card title="How the year is going">
+          <table>
+            <thead>
+              <tr>
+                <th>Entity</th>
+                <th>Cash</th>
+                <th>Net income</th>
+                <th>Waiting for you</th>
+              </tr>
+            </thead>
+            <tbody>
+              {overview.value.entities.map((line) => (
+                <tr key={line.entityId}>
+                  <td>
+                    <Link to={`/orgs/${orgId}/entities/${line.entityId}`}>{line.legalName}</Link>
+                  </td>
+                  <td>
+                    {line.setUp ? <MoneyCell>{formatMoney(line.cash)}</MoneyCell> : <span className="muted">not set up yet</span>}
+                  </td>
+                  <td>{line.setUp ? <MoneyCell>{formatMoney(line.netIncome)}</MoneyCell> : ''}</td>
+                  <td>
+                    {line.needsAttention
+                      ? [
+                          line.draftEntries > 0 ? `${line.draftEntries} draft entry(s)` : null,
+                          line.uncategorizedBankTransactions > 0
+                            ? `${line.uncategorizedBankTransactions} bank transaction(s) to categorize`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(', ')
+                      : 'Nothing'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            {overview.value.totals && (
+              <tfoot>
+                <tr>
+                  <th>All entities ({overview.value.totals.currency})</th>
+                  <th>
+                    <MoneyCell>{formatMoney(overview.value.totals.cash)}</MoneyCell>
+                  </th>
+                  <th>
+                    <MoneyCell>{formatMoney(overview.value.totals.netIncome)}</MoneyCell>
+                  </th>
+                  <th />
+                </tr>
+              </tfoot>
+            )}
+          </table>
+          {overview.value.mixedCurrencies && (
+            <p className="muted">
+              These entities keep their books in different currencies, so there is no total — Solid holds no
+              exchange rates and will not invent one.
+            </p>
+          )}
+          <p className="muted">{overview.value.note}</p>
         </Card>
       )}
 

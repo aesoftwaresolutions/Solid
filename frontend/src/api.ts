@@ -567,6 +567,30 @@ export interface CashFlow {
 }
 
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
+export interface OverviewEntityLine {
+  entityId: string;
+  legalName: string;
+  kind: string;
+  currency: string;
+  /** False for an entity with no chart of accounts yet: its figures are zero, not a result. */
+  setUp: boolean;
+  cash: Money;
+  netIncome: Money;
+  draftEntries: number;
+  uncategorizedBankTransactions: number;
+  needsAttention: boolean;
+}
+
+export interface Overview {
+  orgId: string;
+  from: string;
+  to: string;
+  mixedCurrencies: boolean;
+  entities: OverviewEntityLine[];
+  totals: { currency: string; cash: Money; netIncome: Money } | null;
+  note: string;
+}
+
 export type ImportKind = 'accounts' | 'customers' | 'vendors';
 
 export interface ImportResultRow {
@@ -1019,6 +1043,9 @@ export const api = {
     method: 'PATCH',
     ...json(patch),
   }),
+
+  overview: (orgId: string, from?: string, to?: string) =>
+    request<Overview>(`/orgs/${orgId}/overview${from && to ? `?from=${from}&to=${to}` : ''}`),
 
   previewImport: (orgId: string, entityId: string, kind: ImportKind, csv: string) =>
     request<ImportResult>(`/orgs/${orgId}/entities/${entityId}/imports/${kind}/preview`, {
