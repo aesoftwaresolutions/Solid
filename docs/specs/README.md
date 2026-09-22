@@ -48,5 +48,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 042 | Finding that one transaction (search) | [042](042-search.md) | Done (owner review) | 005, 008, 012, 013, 017 |
 | 043 | Fixes from the second review | [043](043-second-review-fixes.md) | Done (security review) | 034-042 |
 | 044 | The first ten minutes (getting started) | [044](044-getting-started.md) | Done (owner review) | 003, 005, 008, 028 |
+| 045 | Proving the packaged stack runs | [045](045-proving-the-stack-runs.md) | Done (owner review) | 001, 018 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

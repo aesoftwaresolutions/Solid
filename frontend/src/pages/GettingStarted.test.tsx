@@ -76,6 +76,7 @@ describe('spec 044: the first ten minutes', () => {
 
   test('the settings page saves a home state and will not offer to change the entity kind', async () => {
     const { calls } = mockApi({
+      [`GET ${base}/journal/verify`]: { valid: true, postedEntries: 12, firstInvalidSeq: null },
       [`GET ${base}`]: { id: 'e1', orgId: 'o1', kind: 'smllc', legalName: 'Zeta Shop LLC', fiscalYearEnd: 12, accountingMethod: 'cash', homeState: null, baseCurrency: 'USD' },
       [`PATCH ${base}`]: { id: 'e1', orgId: 'o1', kind: 'smllc', legalName: 'Zeta Shop LLC', fiscalYearEnd: 12, accountingMethod: 'cash', homeState: 'TX', baseCurrency: 'USD' },
     });
@@ -90,7 +91,9 @@ describe('spec 044: the first ten minutes', () => {
     fireEvent.change(await screen.findByLabelText('Home state'), { target: { value: 'TX' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Saved.');
+    // Spec 045: the integrity check is on this page too.
+    expect(await screen.findByText(/12 posted entries still hashes/)).toBeInTheDocument();
+    expect((await screen.findAllByRole('status')).some((n) => n.textContent?.includes('Saved.'))).toBe(true);
     expect(calls.find((c) => c.key === `PATCH ${base}`)?.body).toMatchObject({ homeState: 'TX' });
     expect(screen.queryByLabelText(/Kind/)).not.toBeInTheDocument();
   });

@@ -83,6 +83,26 @@ docker compose up -d --build
 Flyway applies new migrations at startup, so take a backup first (the step above takes seconds). Migrations are
 append-only, so a newer database cannot be served by an older application — roll forward, or restore the backup.
 
+## Checking the stack actually works
+
+After an upgrade — or after a restore, or any time you want to be sure — run the smoke test from outside:
+
+```bash
+python3 ops/smoke-test.py http://localhost:8080
+```
+
+It signs up a throwaway user, turns on MFA, creates a small organization, posts one entry and checks that the
+profit & loss, the balance sheet, the cash-flow statement and the ledger's hash chain all agree with it. It
+uses nothing but the public API, so a pass means the jar, the migrations, the reverse proxy and the API are
+all working together — not merely that the build was green.
+
+A failure prints the call that broke and what came back. The usual causes are the ones in the next section;
+if the checks themselves disagree (a figure comes back wrong), stop and report it rather than upgrading
+further, because that is a correctness problem, not a deployment one.
+
+The test leaves its throwaway organization behind on purpose, so you can look at it. Remove it when you want
+to; nothing else refers to it.
+
 ## When the app will not start
 
 - **"different SOLID_MASTER_KEY"** — the database and the key do not belong together. Restore the matching key.

@@ -12,6 +12,7 @@ const STATES = [
 export default function EntitySettingsPage() {
   const { orgId = '', entityId = '' } = useParams();
   const entity = useLoader(() => api.entity(orgId, entityId), [orgId, entityId]);
+  const integrity = useLoader(() => api.verifyJournal(orgId, entityId), [orgId, entityId]);
 
   const [legalName, setLegalName] = useState('');
   const [homeState, setHomeState] = useState('');
@@ -52,6 +53,20 @@ export default function EntitySettingsPage() {
       <h1>Entity settings</h1>
       <ErrorMessage error={entity.error} />
       {!entity.value && !entity.error && <Loading what="this entity" />}
+
+      <Card title="Are the books intact?">
+        <ErrorMessage error={integrity.error} />
+        {!integrity.value && !integrity.error && <Loading what="the integrity check" />}
+        {integrity.value && (
+          <p role="status">
+            {integrity.value.valid
+              ? `Every one of the ${integrity.value.postedEntries} posted entries still hashes to the one before it,
+                 so nothing has been altered or removed since it was posted.`
+              : `The chain breaks at entry ${integrity.value.firstInvalidSeq}. Something changed the posted
+                 entries outside Solid — restore from a backup and tell whoever administers this server.`}
+          </p>
+        )}
+      </Card>
 
       {entity.value && (
         <Card title="How this entity keeps its books">

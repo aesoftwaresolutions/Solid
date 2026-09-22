@@ -1085,6 +1085,10 @@ export const api = {
     ...json(patch),
   }),
 
+  verifyJournal: (orgId: string, entityId: string) =>
+    request<{ valid: boolean; postedEntries: number; firstInvalidSeq: number | null }>(
+      `/orgs/${orgId}/entities/${entityId}/journal/verify`,
+    ),
   setup: (orgId: string, entityId: string) =>
     request<Setup>(`/orgs/${orgId}/entities/${entityId}/setup`),
   updateEntity: (orgId: string, entityId: string, patch: { legalName?: string; accountingMethod?: string; homeState?: string }) =>
