@@ -129,6 +129,24 @@ public class SalesTaxService {
         return new Charge(rate, Money.ofMinor(tax.longValueExact(), lineAmount.currency()));
     }
 
+    /**
+     * The tax on an amount at a rate <em>already used</em>, for reversing a charge rather than making one.
+     *
+     * <p>Deliberately skips the "is this rate effective today" checks {@link #chargeFor} makes: undoing tax
+     * charged under last year's rate is governed by last year's rate, whether or not it is still in use. See
+     * docs/tax-sources/credit-note-sales-tax.md.
+     */
+    public Charge reversalAtStoredRate(UUID entityId, UUID rateId, Money amount) {
+        SalesTaxModels.Rate rate = db.sql(SELECT + " where entity_id = ? and id = ?")
+                .params(entityId, rateId).query(SalesTaxService::mapRate).optional()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Sales tax rate " + rateId + " is not a rate of this entity"));
+        BigDecimal tax = BigDecimal.valueOf(amount.minorUnits())
+                .multiply(rate.ratePercent())
+                .divide(new BigDecimal("100"), 0, RoundingMode.HALF_UP);
+        return new Charge(rate, Money.ofMinor(tax.longValueExact(), amount.currency()));
+    }
+
     public record Charge(SalesTaxModels.Rate rate, Money tax) {
     }
 
@@ -140,18 +158,36 @@ public class SalesTaxService {
         }
 
         return orgScope.call(orgId, () -> {
+            // Invoices charge the tax; issued credit notes take it back out, in the period they were issued
+            // (spec 058). Both sides are summed here so the report is what is actually owed to the state.
             List<Map<String, Object>> rows = db.sql("""
-                    select r.jurisdiction, r.rate_percent,
-                           sum(l.amount_minor) as taxable_minor,
-                           sum(l.tax_amount_minor) as tax_minor
-                    from ar_ap.invoice_line l
-                    join ar_ap.invoice i on i.id = l.invoice_id
-                    join stx.tax_rate r on r.id = l.tax_rate_id
-                    where i.entity_id = ? and i.status in ('open', 'partially_paid', 'paid')
-                      and i.issue_date between ? and ?
-                    group by r.jurisdiction, r.rate_percent
-                    order by r.jurisdiction, r.rate_percent""")
-                    .params(entityId, from, to).query().listOfRows();
+                    select jurisdiction, rate_percent,
+                           sum(taxable_minor) as taxable_minor,
+                           sum(tax_minor) as tax_minor
+                    from (
+                        select r.jurisdiction, r.rate_percent,
+                               sum(l.amount_minor) as taxable_minor,
+                               sum(l.tax_amount_minor) as tax_minor
+                        from ar_ap.invoice_line l
+                        join ar_ap.invoice i on i.id = l.invoice_id
+                        join stx.tax_rate r on r.id = l.tax_rate_id
+                        where i.entity_id = :entity and i.status in ('open', 'partially_paid', 'paid')
+                          and i.issue_date between :from and :to
+                        group by r.jurisdiction, r.rate_percent
+                        union all
+                        select r.jurisdiction, r.rate_percent,
+                               -sum(cl.amount_minor) as taxable_minor,
+                               -sum(cl.tax_amount_minor) as tax_minor
+                        from ar_ap.credit_note_line cl
+                        join ar_ap.credit_note cn on cn.id = cl.credit_note_id
+                        join stx.tax_rate r on r.id = cl.tax_rate_id
+                        where cn.entity_id = :entity and cn.status = 'issued'
+                          and cn.issue_date between :from and :to
+                        group by r.jurisdiction, r.rate_percent
+                    ) both_sides
+                    group by jurisdiction, rate_percent
+                    order by jurisdiction, rate_percent""")
+                    .param("entity", entityId).param("from", from).param("to", to).query().listOfRows();
 
             List<SalesTaxModels.JurisdictionTotal> totals = new ArrayList<>();
             Money taxable = Money.zero(ccy);

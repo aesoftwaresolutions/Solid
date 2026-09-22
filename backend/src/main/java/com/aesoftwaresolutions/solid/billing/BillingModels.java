@@ -32,8 +32,13 @@ public final class BillingModels {
                           Money taxTotal, Money creditsApplied) {
     }
 
+    /**
+     * @param invoiceLineId the charge this line is taking back, when there is one — where its tax comes from
+     * @param taxAmount     the sales tax reversed with it (spec 058)
+     */
     public record CreditNoteLine(UUID id, int lineNo, String description, BigDecimal quantity, Money unitPrice,
-                                 Money amount, UUID incomeAccountId) {
+                                 Money amount, UUID incomeAccountId, UUID invoiceLineId, UUID taxRateId,
+                                 Money taxAmount) {
     }
 
     public record CreditApplication(UUID id, UUID invoiceId, String invoiceNumber, Money amount) {
@@ -45,7 +50,8 @@ public final class BillingModels {
      */
     public record CreditNote(UUID id, UUID customerId, String customerName, String creditNumber, LocalDate issueDate,
                              String memo, Money total, String status, UUID journalEntryId, Money applied,
-                             Money remaining, List<CreditNoteLine> lines, List<CreditApplication> applications) {
+                             Money remaining, List<CreditNoteLine> lines, List<CreditApplication> applications,
+                             Money taxTotal) {
     }
 
     public record PaymentApplication(UUID invoiceId, Money amount) {

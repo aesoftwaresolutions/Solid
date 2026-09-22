@@ -25,8 +25,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/orgs/{orgId}/entities/{entityId}/credit-notes")
 class CreditNoteController {
 
+    /** {@code invoiceLineId} is optional: with it the credit is a return and reverses that line's tax. */
     record LineRequest(@NotBlank @Size(max = 300) String description, @NotNull BigDecimal quantity,
-                       @NotNull Money unitPrice, @NotNull UUID incomeAccountId) {
+                       @NotNull Money unitPrice, @NotNull UUID incomeAccountId, UUID invoiceLineId) {
     }
 
     record CreditNoteRequest(@NotNull UUID customerId, @NotNull LocalDate issueDate,
@@ -97,7 +98,7 @@ class CreditNoteController {
     private static List<CreditNoteService.NewLine> lines(CreditNoteRequest body) {
         return body.lines().stream()
                 .map(line -> new CreditNoteService.NewLine(line.description(), line.quantity(), line.unitPrice(),
-                        line.incomeAccountId()))
+                        line.incomeAccountId(), line.invoiceLineId()))
                 .toList();
     }
 }

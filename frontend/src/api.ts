@@ -190,6 +190,20 @@ export interface CreditApplication {
   amount: Money;
 }
 
+export interface CreditNoteLine {
+  id: string;
+  lineNo: number;
+  description: string;
+  quantity: string;
+  unitPrice: Money;
+  amount: Money;
+  incomeAccountId: string;
+  /** The invoice line this takes back, when it is a return rather than a goodwill credit. */
+  invoiceLineId: string | null;
+  taxRateId: string | null;
+  taxAmount: Money;
+}
+
 export interface CreditNote {
   id: string;
   customerId: string;
@@ -201,7 +215,8 @@ export interface CreditNote {
   status: string;
   applied: Money;
   remaining: Money;
-  lines: InvoiceLine[];
+  taxTotal: Money;
+  lines: CreditNoteLine[];
   applications: CreditApplication[];
 }
 
@@ -1400,7 +1415,14 @@ export const api = {
       customerId: string;
       issueDate: string;
       memo?: string;
-      lines: { description: string; quantity: string; unitPrice: Money; incomeAccountId: string }[];
+      lines: {
+        description: string;
+        quantity: string;
+        unitPrice: Money;
+        incomeAccountId: string;
+        /** Naming the invoice line being credited is what brings its sales tax back out (spec 058). */
+        invoiceLineId?: string;
+      }[];
     },
   ) =>
     request<CreditNote>(`/orgs/${orgId}/entities/${entityId}/credit-notes`, {

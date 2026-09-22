@@ -1,6 +1,6 @@
 # 057 — Crediting a customer
 
-**Status:** Done · **Owner review:** Needed · **CPA review:** Needed
+**Status:** Done · **Owner review:** Needed · **CPA review:** Answered — see spec 058
 
 ## Goal
 Today the only way to undo a charge is to void the whole invoice, which is wrong twice over: an invoice that
@@ -64,6 +64,5 @@ worked out: the invoice's own balance, accounts-receivable aging, and the statem
 8. Another organization gets 404.
 
 ## Out of scope
-Crediting sales tax (a credit against a taxed invoice needs the tax treatment of a return, which is its own
-slice and its own CPA question), refunding a credit in cash, vendor credits on the purchases side, and any
-automatic matching of credits to invoices.
+Crediting sales tax — the CPA has since ruled on it, and spec 058 implements that ruling. Refunding a credit
+in cash, vendor credits on the purchases side, and any automatic matching of credits to invoices.

@@ -528,12 +528,16 @@ describe('spec 057: credit notes', () => {
   const openInvoice = {
     id: 'i1', customerId: 'c1', invoiceNumber: 'INV-0001', issueDate: '2026-09-01', dueDate: '2026-10-01',
     terms: 'net_30', memo: null, total: money('1000.00'), amountPaid: money('0.00'),
-    creditsApplied: money('0.00'), balanceDue: money('1000.00'), status: 'open', lines: [],
+    creditsApplied: money('0.00'), balanceDue: money('1000.00'), status: 'open',
+    lines: [{
+      id: 'il1', lineNo: 1, description: 'Widgets', quantity: '1', unitPrice: money('1000.00'),
+      amount: money('1000.00'), incomeAccountId: 'a-4000', taxRateId: 'r1', taxAmount: money('82.50'),
+    }],
   };
   const credit = {
     id: 'cn1', customerId: 'c1', customerName: 'Northwind Traders', creditNumber: 'CN-0001',
     issueDate: '2026-09-22', memo: null, total: money('250.00'), status: 'issued',
-    applied: money('0.00'), remaining: money('250.00'), lines: [], applications: [],
+    applied: money('0.00'), remaining: money('250.00'), taxTotal: money('0.00'), lines: [], applications: [],
   };
 
   function renderSales(routes: Record<string, unknown> = {}, creditNotes: unknown[] = [credit]) {
@@ -591,6 +595,7 @@ describe('spec 057: credit notes', () => {
     fireEvent.click(await screen.findByLabelText('Issue CN-0002'));
     await waitFor(() => expect(calls.some((c) => c.key === `POST ${base}/credit-notes/cn2/issue`)).toBe(true));
 
+    fireEvent.change(screen.getByLabelText('Line you are crediting'), { target: { value: 'il1' } });
     fireEvent.change(screen.getByLabelText('What the credit is for'), { target: { value: 'Overcharged' } });
     fireEvent.change(screen.getByLabelText('Amount to credit'), { target: { value: '250.00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save the credit note' }));
@@ -598,7 +603,7 @@ describe('spec 057: credit notes', () => {
     await waitFor(() =>
       expect(calls.find((c) => c.key === `POST ${base}/credit-notes`)?.body).toMatchObject({
         customerId: 'c1',
-        lines: [{ description: 'Overcharged', quantity: '1' }],
+        lines: [{ description: 'Overcharged', quantity: '1', invoiceLineId: 'il1' }],
       }),
     );
   });

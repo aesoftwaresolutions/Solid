@@ -282,6 +282,9 @@ export default function SalesPage() {
             entityId={entityId}
             customers={customers.value}
             incomeAccounts={incomeAccounts}
+            invoices={(invoices.value ?? []).filter(
+              (invoice) => invoice.status !== 'draft' && invoice.status !== 'void',
+            )}
             onCreated={creditNotes.reload}
           />
         )}
@@ -1071,15 +1074,18 @@ function NewCreditNote({
   entityId,
   customers,
   incomeAccounts,
+  invoices,
   onCreated,
 }: {
   orgId: string;
   entityId: string;
   customers: Customer[];
   incomeAccounts: Account[];
+  invoices: Invoice[];
   onCreated: () => void;
 }) {
   const [customerId, setCustomerId] = useState('');
+  const [invoiceLineId, setInvoiceLineId] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [incomeAccountId, setIncomeAccountId] = useState('');
@@ -1101,7 +1107,13 @@ function NewCreditNote({
             customerId: chosenCustomer,
             issueDate: today(),
             lines: [
-              { description: description.trim(), quantity: '1', unitPrice, incomeAccountId: chosenAccount },
+              {
+                description: description.trim(),
+                quantity: '1',
+                unitPrice,
+                incomeAccountId: chosenAccount,
+                invoiceLineId: invoiceLineId || undefined,
+              },
             ],
           })
           .then(() => {
@@ -1124,6 +1136,26 @@ function NewCreditNote({
           ))}
         </select>
       </label>
+      <label>
+        Line you are crediting
+        <select value={invoiceLineId} onChange={(e) => setInvoiceLineId(e.target.value)}>
+          <option value="">nothing — a goodwill credit, with no sales tax to give back</option>
+          {invoices
+            .filter((invoice) => invoice.customerId === chosenCustomer)
+            .flatMap((invoice) =>
+              invoice.lines.map((line) => (
+                <option key={line.id} value={line.id}>
+                  {invoice.invoiceNumber ?? invoice.id.slice(0, 8)} — {line.description} (
+                  {formatMoney(line.amount)})
+                </option>
+              )),
+            )}
+        </select>
+      </label>
+      <p className="muted">
+        Naming the line is what brings its sales tax back out: all of it if you credit the line in full, or
+        the credited share of it at the rate that invoice used.
+      </p>
       <label>
         What the credit is for
         <input value={description} required maxLength={300} onChange={(e) => setDescription(e.target.value)} />

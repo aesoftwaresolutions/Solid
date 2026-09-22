@@ -12,6 +12,7 @@ import com.aesoftwaresolutions.solid.money.Money;
 import com.aesoftwaresolutions.solid.org.LegalEntity;
 import com.aesoftwaresolutions.solid.org.OrgService;
 import com.aesoftwaresolutions.solid.platform.OrgScope;
+import com.aesoftwaresolutions.solid.salestax.SalesTaxModels;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -33,7 +34,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class CreditNoteService {
 
-    public record NewLine(String description, BigDecimal quantity, Money unitPrice, UUID incomeAccountId) {
+    /**
+     * @param invoiceLineId the invoice line being credited, when this is a return rather than a goodwill
+     *                      credit. It is what decides the sales tax reversed (spec 058).
+     */
+    public record NewLine(String description, BigDecimal quantity, Money unitPrice, UUID incomeAccountId,
+                          UUID invoiceLineId) {
     }
 
     private final JdbcClient db;
@@ -42,9 +48,12 @@ public class CreditNoteService {
     private final BillingService billing;
     private final AccountService accounts;
     private final JournalService journal;
+    private final com.aesoftwaresolutions.solid.salestax.SalesTaxService salesTax;
 
     CreditNoteService(JdbcClient db, OrgScope orgScope, OrgService orgs, BillingService billing,
-                      AccountService accounts, JournalService journal) {
+                      AccountService accounts, JournalService journal,
+                      com.aesoftwaresolutions.solid.salestax.SalesTaxService salesTax) {
+        this.salesTax = salesTax;
         this.db = db;
         this.orgScope = orgScope;
         this.orgs = orgs;
@@ -116,6 +125,13 @@ public class CreditNoteService {
             for (BillingModels.CreditNoteLine line : credit.lines()) {
                 journalLines.add(new JournalService.NewLine(line.incomeAccountId(), line.amount(),
                         line.description()));
+                if (line.taxRateId() != null && line.taxAmount().isPositive()) {
+                    // The tax goes back out of the liability account it was credited to: the entity owes the
+                    // state less by exactly what it is reversing.
+                    SalesTaxModels.Rate rate = salesTax.get(orgId, entityId, line.taxRateId());
+                    journalLines.add(new JournalService.NewLine(rate.liabilityAccountId(), line.taxAmount(),
+                            "Sales tax reversed " + rate.jurisdiction()));
+                }
             }
             journalLines.add(new JournalService.NewLine(receivable.id(), credit.total().negate(), null));
             JournalEntry entry = journal.postFromSource(orgId, entityId, credit.issueDate(),
@@ -218,6 +234,7 @@ public class CreditNoteService {
             throw new IllegalArgumentException("A credit note needs at least one line");
         }
         Money total = Money.zero(currency);
+        Money tax = Money.zero(currency);
         int lineNo = 1;
         for (NewLine line : lines) {
             if (line.quantity().signum() <= 0 || line.quantity().scale() > 4) {
@@ -235,17 +252,79 @@ public class CreditNoteService {
                         "Credit note lines must use an active, non-header income account");
             }
             Money amount = line.unitPrice().multiply(line.quantity(), RoundingMode.HALF_UP);
+            Origin origin = line.invoiceLineId() == null ? null
+                    : origin(entityId, creditNoteId, line.invoiceLineId(), amount, currency);
+            Money lineTax = origin == null ? Money.zero(currency) : origin.tax();
             db.sql("""
                     insert into ar_ap.credit_note_line (id, org_id, credit_note_id, line_no, description, quantity,
-                                                        unit_price_minor, amount_minor, income_account_id)
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?)""")
+                                                        unit_price_minor, amount_minor, income_account_id,
+                                                        invoice_line_id, tax_rate_id, tax_amount_minor)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""")
                     .params(Ids.newId(), orgId, creditNoteId, lineNo++, line.description().trim(), line.quantity(),
-                            line.unitPrice().minorUnits(), amount.minorUnits(), line.incomeAccountId())
+                            line.unitPrice().minorUnits(), amount.minorUnits(), line.incomeAccountId(),
+                            line.invoiceLineId(), origin == null ? null : origin.rateId(), lineTax.minorUnits())
                     .update();
-            total = total.add(amount);
+            total = total.add(amount).add(lineTax);
+            tax = tax.add(lineTax);
         }
-        db.sql("update ar_ap.credit_note set total_minor = ? where id = ?")
-                .params(total.minorUnits(), creditNoteId).update();
+        db.sql("update ar_ap.credit_note set total_minor = ?, tax_total_minor = ? where id = ?")
+                .params(total.minorUnits(), tax.minorUnits(), creditNoteId).update();
+    }
+
+    /** What an invoice line says about the tax a credit against it reverses. */
+    private record Origin(UUID rateId, Money tax) {
+    }
+
+    /**
+     * Works out the sales tax a credit line reverses, following the CPA ruling recorded in
+     * docs/tax-sources/credit-note-sales-tax.md: a full credit gives back the exact tax charged, a partial one
+     * gives back the credited amount at the original rate.
+     */
+    private Origin origin(UUID entityId, UUID creditNoteId, UUID invoiceLineId, Money creditedAmount,
+                          String currency) {
+        Map<String, Object> row = db.sql("""
+                        select l.amount_minor, l.tax_rate_id, l.tax_amount_minor, i.id as invoice_id,
+                               i.status, i.customer_id,
+                               coalesce((select sum(cl.amount_minor) from ar_ap.credit_note_line cl
+                                         join ar_ap.credit_note cn on cn.id = cl.credit_note_id
+                                         where cl.invoice_line_id = l.id and cn.status <> 'void'
+                                           and cl.credit_note_id <> ?), 0) as already_credited_minor
+                        from ar_ap.invoice_line l join ar_ap.invoice i on i.id = l.invoice_id
+                        where l.id = ? and i.entity_id = ?""")
+                .params(creditNoteId, invoiceLineId, entityId).query().listOfRows().stream().findFirst()
+                .orElseThrow(() -> new NotFoundException("Invoice line " + invoiceLineId + " not found"));
+
+        String status = (String) row.get("status");
+        if (status.equals("draft") || status.equals("void")) {
+            throw new BusinessRuleException("INVOICE_NOT_OPEN",
+                    "The invoice this line belongs to is " + status);
+        }
+        UUID customerId = db.sql("select customer_id from ar_ap.credit_note where id = ?")
+                .param(creditNoteId).query(UUID.class).single();
+        if (!customerId.equals(row.get("customer_id"))) {
+            throw new BusinessRuleException("WRONG_CUSTOMER",
+                    "That invoice line belongs to a different customer");
+        }
+
+        Money originalAmount = Money.ofMinor(((Number) row.get("amount_minor")).longValue(), currency);
+        Money alreadyCredited = Money.ofMinor(((Number) row.get("already_credited_minor")).longValue(), currency);
+        if (alreadyCredited.add(creditedAmount).compareTo(originalAmount) > 0) {
+            throw new BusinessRuleException("OVER_CREDITED", "That line was charged "
+                    + originalAmount.toDecimalString() + " " + currency + " and "
+                    + alreadyCredited.toDecimalString() + " of it is already credited");
+        }
+
+        UUID rateId = (UUID) row.get("tax_rate_id");
+        if (rateId == null) {
+            return new Origin(null, Money.zero(currency));
+        }
+        Money originalTax = Money.ofMinor(((Number) row.get("tax_amount_minor")).longValue(), currency);
+        // Full credit: give back exactly what was charged, so a rounded cent is not left stranded.
+        if (creditedAmount.compareTo(originalAmount) == 0 && alreadyCredited.isZero()) {
+            return new Origin(rateId, originalTax);
+        }
+        // Partial credit: the credited amount at the rate the invoice used, whatever its state today.
+        return new Origin(rateId, salesTax.reversalAtStoredRate(entityId, rateId, creditedAmount).tax());
     }
 
     private BillingModels.CreditNote lock(UUID entityId, UUID creditNoteId) {
@@ -259,6 +338,7 @@ public class CreditNoteService {
         Map<String, Object> row = db.sql("""
                         select cn.id, cn.customer_id, c.name as customer_name, cn.credit_number, cn.issue_date,
                                cn.memo, cn.total_minor, cn.currency, cn.status, cn.journal_entry_id,
+                               cn.tax_total_minor,
                                coalesce((select sum(amount_minor) from ar_ap.credit_application
                                          where credit_note_id = cn.id), 0) as applied_minor
                         from ar_ap.credit_note cn join ar_ap.customer c on c.id = cn.customer_id
@@ -270,14 +350,18 @@ public class CreditNoteService {
         Money applied = Money.ofMinor(((Number) row.get("applied_minor")).longValue(), currency);
 
         List<BillingModels.CreditNoteLine> lines = db.sql("""
-                        select id, line_no, description, quantity, unit_price_minor, amount_minor, income_account_id
+                        select id, line_no, description, quantity, unit_price_minor, amount_minor,
+                               income_account_id, invoice_line_id, tax_rate_id, tax_amount_minor
                         from ar_ap.credit_note_line where credit_note_id = ? order by line_no""")
                 .param(creditNoteId)
                 .query((rs, n) -> new BillingModels.CreditNoteLine(rs.getObject("id", UUID.class),
                         rs.getInt("line_no"), rs.getString("description"), rs.getBigDecimal("quantity"),
                         Money.ofMinor(rs.getLong("unit_price_minor"), currency),
                         Money.ofMinor(rs.getLong("amount_minor"), currency),
-                        rs.getObject("income_account_id", UUID.class)))
+                        rs.getObject("income_account_id", UUID.class),
+                        rs.getObject("invoice_line_id", UUID.class),
+                        rs.getObject("tax_rate_id", UUID.class),
+                        Money.ofMinor(rs.getLong("tax_amount_minor"), currency)))
                 .list();
         List<BillingModels.CreditApplication> applications = db.sql("""
                         select ca.id, ca.invoice_id, i.invoice_number, ca.amount_minor
@@ -292,7 +376,8 @@ public class CreditNoteService {
         return new BillingModels.CreditNote((UUID) row.get("id"), (UUID) row.get("customer_id"),
                 (String) row.get("customer_name"), (String) row.get("credit_number"), date(row.get("issue_date")),
                 (String) row.get("memo"), total, (String) row.get("status"), (UUID) row.get("journal_entry_id"),
-                applied, total.subtract(applied), lines, applications);
+                applied, total.subtract(applied), lines, applications,
+                Money.ofMinor(((Number) row.get("tax_total_minor")).longValue(), currency));
     }
 
     private static LocalDate date(Object value) {
