@@ -1,6 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, formatMoney, type Account, type Invoice, type SalesTaxRate } from '../api';
+import {
+  api,
+  formatMoney,
+  type Account,
+  type Customer,
+  type Invoice,
+  type RecurringInvoiceRun,
+  type SalesTaxRate,
+} from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
 
 const TERMS = ['due_on_receipt', 'net_15', 'net_30', 'net_60'];
@@ -19,9 +27,12 @@ export default function SalesPage() {
     [orgId, entityId],
   );
 
+  const recurring = useLoader(() => api.recurringInvoices(orgId, entityId), [orgId, entityId]);
+
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
   const [paying, setPaying] = useState<Invoice | null>(null);
+  const [runResult, setRunResult] = useState<RecurringInvoiceRun | null>(null);
 
   const postable = useMemo(
     () => (accounts.value ?? []).filter((a: Account) => !a.isHeader && !a.isArchived),
@@ -163,6 +174,93 @@ export default function SalesPage() {
           />
         </Card>
       )}
+
+      <Card title="Invoices that repeat">
+        <ErrorMessage error={recurring.error} />
+        <p className="muted">
+          A retainer or a monthly service. Nothing goes out on a timer: press <em>Create what is due</em> and
+          Solid makes a draft invoice for each period that has come round, once. You look at it, then issue it.
+        </p>
+        {customers.value && customers.value.length > 0 && incomeAccounts.length > 0 && (
+          <NewRecurringInvoice
+            orgId={orgId}
+            entityId={entityId}
+            customers={customers.value}
+            incomeAccounts={incomeAccounts}
+            onCreated={recurring.reload}
+          />
+        )}
+        {recurring.value && recurring.value.length > 0 && (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>What</th>
+                  <th>Customer</th>
+                  <th>Every</th>
+                  <th>Amount</th>
+                  <th>Last made</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {recurring.value.map((template) => (
+                  <tr key={template.id}>
+                    <td>{template.name}</td>
+                    <td>{template.customerName}</td>
+                    <td>
+                      {template.frequency}, day {template.dayOfMonth}
+                    </td>
+                    <td className="right">{formatMoney(template.total)}</td>
+                    <td className="muted">{template.lastCreated ?? 'never'}</td>
+                    <td>
+                      {template.active ? (
+                        <button
+                          type="button"
+                          aria-label={`Stop ${template.name}`}
+                          onClick={() => act(api.deactivateRecurringInvoice(orgId, entityId, template.id))}
+                        >
+                          Stop
+                        </button>
+                      ) : (
+                        <span className="muted">stopped</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  api
+                    .runRecurringInvoices(orgId, entityId, today())
+                    .then((result) => {
+                      setRunResult(result);
+                      invoices.reload();
+                      recurring.reload();
+                    })
+                    .catch(setError)
+                }
+              >
+                Create what is due
+              </button>
+              {runResult && (
+                <span role="status">
+                  {' '}
+                  Made {runResult.created.length} draft invoice(s)
+                  {runResult.skipped.length > 0
+                    ? `, skipped ${runResult.skipped.length}: ${runResult.skipped[0].reason}`
+                    : ''}
+                  .
+                </span>
+              )}
+            </p>
+          </>
+        )}
+      </Card>
 
       <Card title="Sales tax">
         <ErrorMessage error={taxRates.error} />
@@ -586,6 +684,118 @@ function NewTaxRate({
       </label>
       <button type="submit" disabled={busy}>
         Add rate
+      </button>
+    </form>
+  );
+}
+
+/** A template for an invoice that repeats: one line is enough to be useful, so that is what this asks for. */
+function NewRecurringInvoice({
+  orgId,
+  entityId,
+  customers,
+  incomeAccounts,
+  onCreated,
+}: {
+  orgId: string;
+  entityId: string;
+  customers: Customer[];
+  incomeAccounts: Account[];
+  onCreated: () => void;
+}) {
+  const [customerId, setCustomerId] = useState('');
+  const [name, setName] = useState('');
+  const [frequency, setFrequency] = useState('monthly');
+  const [startDate, setStartDate] = useState(today());
+  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState('');
+  const [incomeAccountId, setIncomeAccountId] = useState('');
+  const [error, setError] = useState<unknown>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  // Derived rather than initialised from a list that may still have been empty on the first render.
+  const chosenCustomer = customerId || customers[0]?.id || '';
+  const chosenAccount = incomeAccountId || incomeAccounts[0]?.id || '';
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError(undefined);
+        api
+          .createRecurringInvoice(orgId, entityId, {
+            customerId: chosenCustomer,
+            name: name.trim(),
+            terms: 'net_30',
+            frequency,
+            startDate,
+            lines: [
+              {
+                description: description.trim(),
+                quantity: '1',
+                unitPrice: { amount: amount.trim(), currency: 'USD' },
+                incomeAccountId: chosenAccount,
+              },
+            ],
+          })
+          .then(() => {
+            setName('');
+            setDescription('');
+            setAmount('');
+            onCreated();
+          })
+          .catch(setError)
+          .finally(() => setBusy(false));
+      }}
+    >
+      <ErrorMessage error={error} />
+      <label>
+        What to call it
+        <input value={name} required maxLength={120} onChange={(e) => setName(e.target.value)} />
+      </label>
+      <label>
+        Customer for the repeat
+        <select value={chosenCustomer} onChange={(e) => setCustomerId(e.target.value)}>
+          {customers.map((customer) => (
+            <option key={customer.id} value={customer.id}>
+              {customer.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        How often
+        <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
+          <option value="monthly">monthly</option>
+          <option value="quarterly">quarterly</option>
+          <option value="annual">annual</option>
+        </select>
+      </label>
+      <label>
+        First one on
+        <input type="date" value={startDate} required onChange={(e) => setStartDate(e.target.value)} />
+      </label>
+      <label>
+        Line description
+        <input value={description} required maxLength={300} onChange={(e) => setDescription(e.target.value)} />
+      </label>
+      <label>
+        Amount each time
+        <input value={amount} required inputMode="decimal" onChange={(e) => setAmount(e.target.value)} />
+      </label>
+      <label>
+        Income account for the repeat
+        <select value={chosenAccount} onChange={(e) => setIncomeAccountId(e.target.value)}>
+          {incomeAccounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.code} {account.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" disabled={busy}>
+        Save the template
       </button>
     </form>
   );

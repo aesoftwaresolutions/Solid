@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, test, vi } from 'vitest';
@@ -56,6 +56,7 @@ describe('spec 017 AC 1-3: sales', () => {
       [`GET ${base}/invoices`]: () => invoices,
       [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
       [`GET ${base}/sales-tax-rates`]: [],
+      [`GET ${base}/recurring-invoices`]: [],
       [`GET ${base}/reports/sales-tax`]: { from: '2026-01-01', to: '2026-09-19', currency: 'USD', jurisdictions: [], totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note' },
       [`POST ${base}/invoices`]: () => {
         invoices = [draft];
@@ -112,6 +113,7 @@ describe('spec 017 AC 1-3: sales', () => {
         [`GET ${base}/invoices`]: [draft],
         [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
         [`GET ${base}/sales-tax-rates`]: [],
+      [`GET ${base}/recurring-invoices`]: [],
         [`GET ${base}/reports/sales-tax`]: { from: '2026-01-01', to: '2026-09-19', currency: 'USD', jurisdictions: [], totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note' },
         [`POST ${base}/invoices/i1/finalize`]: { detail: 'The period is locked', code: 'PERIOD_LOCKED', status: 409 },
       },
@@ -285,6 +287,7 @@ describe('spec 037: sales tax on the sales page', () => {
       [`GET ${base}/invoices`]: [],
       [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
       [`GET ${base}/sales-tax-rates`]: () => rates,
+      [`GET ${base}/recurring-invoices`]: [],
       [`GET ${base}/reports/sales-tax`]: {
         from: '2026-01-01', to: '2026-09-19', currency: 'USD',
         jurisdictions: [{ jurisdiction: 'Springfield, IL', ratePercent: '8.2500', taxableSales: money('1000.00'), taxCollected: money('82.50') }],
@@ -369,5 +372,81 @@ describe('spec 038: editing a vendor', () => {
       taxClassification: 'single_member_llc',
       is1099Vendor: true,
     });
+  });
+});
+
+describe('spec 052: invoices that repeat', () => {
+  const customer = { id: 'c1', name: 'Retainer Client', email: null, phone: null, isArchived: false };
+  const template = {
+    id: 'r1', entityId: 'e1', customerId: 'c1', customerName: 'Retainer Client', name: 'Monthly retainer',
+    memo: null, terms: 'net_30', frequency: 'monthly', startDate: '2026-01-10', endDate: null,
+    dayOfMonth: 10, active: true, total: money('1500.00'), lastCreated: '2026-02-10',
+    lines: [{
+      id: 'rl1', lineNo: 1, description: 'Retainer', quantity: '1', unitPrice: money('1500.00'),
+      amount: money('1500.00'), incomeAccountId: 'a4', taxRateId: null,
+    }],
+  };
+
+  function renderSales(routes: Record<string, unknown> = {}) {
+    const mocked = mockApi({
+      [`GET ${base}/accounts`]: accounts,
+      [`GET ${base}/customers`]: [customer],
+      [`GET ${base}/invoices`]: [],
+      [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
+      [`GET ${base}/sales-tax-rates`]: [],
+      [`GET ${base}/reports/sales-tax`]: {
+        from: '2026-01-01', to: '2026-09-22', currency: 'USD', jurisdictions: [],
+        totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note',
+      },
+      [`GET ${base}/recurring-invoices`]: [template],
+      ...routes,
+    });
+    render(
+      <MemoryRouter initialEntries={['/orgs/o1/entities/e1/sales']}>
+        <Routes>
+          <Route path="/orgs/:orgId/entities/:entityId/sales" element={<SalesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    return mocked;
+  }
+
+  test('lists the templates and says what a run created', async () => {
+    const { calls } = renderSales({
+      [`POST ${base}/recurring-invoices/run`]: {
+        through: '2026-09-22', created: [{ recurringInvoiceId: 'r1', date: '2026-03-10', invoiceId: 'i9', invoiceNumber: 'INV-1009' }],
+        skipped: [],
+      },
+    });
+
+    expect(await screen.findByText('Invoices that repeat')).toBeInTheDocument();
+    expect(screen.getByText('Monthly retainer')).toBeInTheDocument();
+    expect(screen.getByText(/monthly, day 10/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create what is due' }));
+
+    expect(await screen.findByText(/Made 1 draft invoice/)).toBeInTheDocument();
+    expect(calls.some((c) => c.key === `POST ${base}/recurring-invoices/run`)).toBe(true);
+  });
+
+  test('a skipped month says why', async () => {
+    renderSales({
+      [`POST ${base}/recurring-invoices/run`]: {
+        through: '2026-09-22', created: [],
+        skipped: [{ recurringInvoiceId: 'r1', date: '2026-03-10', reason: 'The customer Retainer Client is archived' }],
+      },
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create what is due' }));
+
+    expect(await screen.findByText(/skipped 1: The customer Retainer Client is archived/)).toBeInTheDocument();
+  });
+
+  test('stopping a template calls the server', async () => {
+    const { calls } = renderSales({ [`POST ${base}/recurring-invoices/r1/deactivate`]: { ...template, active: false } });
+
+    fireEvent.click(await screen.findByLabelText('Stop Monthly retainer'));
+
+    expect(calls.some((c) => c.key === `POST ${base}/recurring-invoices/r1/deactivate`)).toBe(true);
   });
 });

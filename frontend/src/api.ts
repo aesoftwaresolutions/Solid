@@ -582,6 +582,42 @@ export interface Invitation {
   token: string | null;
 }
 
+export interface RecurringInvoiceLine {
+  id: string;
+  lineNo: number;
+  description: string;
+  quantity: string;
+  unitPrice: Money;
+  amount: Money;
+  incomeAccountId: string;
+  taxRateId: string | null;
+}
+
+export interface RecurringInvoice {
+  id: string;
+  entityId: string;
+  customerId: string;
+  customerName: string;
+  name: string;
+  memo: string | null;
+  terms: string;
+  frequency: string;
+  startDate: string;
+  endDate: string | null;
+  dayOfMonth: number;
+  active: boolean;
+  lines: RecurringInvoiceLine[];
+  total: Money;
+  /** The last occurrence created, or null when none has been. */
+  lastCreated: string | null;
+}
+
+export interface RecurringInvoiceRun {
+  through: string;
+  created: { recurringInvoiceId: string; date: string; invoiceId: string; invoiceNumber: string }[];
+  skipped: { recurringInvoiceId: string; date: string; reason: string }[];
+}
+
 export interface SessionInfo {
   id: string;
   createdAt: string;
@@ -1129,6 +1165,37 @@ export const api = {
     request<{ valid: boolean; postedEntries: number; firstInvalidSeq: number | null }>(
       `/orgs/${orgId}/entities/${entityId}/journal/verify`,
     ),
+  recurringInvoices: (orgId: string, entityId: string) =>
+    request<RecurringInvoice[]>(`/orgs/${orgId}/entities/${entityId}/recurring-invoices`),
+  createRecurringInvoice: (
+    orgId: string,
+    entityId: string,
+    body: {
+      customerId: string;
+      name: string;
+      terms: string;
+      frequency: string;
+      startDate: string;
+      dayOfMonth?: number;
+      memo?: string;
+      lines: { description: string; quantity: string; unitPrice: Money; incomeAccountId: string }[];
+    },
+  ) =>
+    request<RecurringInvoice>(`/orgs/${orgId}/entities/${entityId}/recurring-invoices`, {
+      method: 'POST',
+      ...json(body),
+    }),
+  deactivateRecurringInvoice: (orgId: string, entityId: string, id: string) =>
+    request<RecurringInvoice>(`/orgs/${orgId}/entities/${entityId}/recurring-invoices/${id}/deactivate`, {
+      method: 'POST',
+      ...json({}),
+    }),
+  runRecurringInvoices: (orgId: string, entityId: string, through: string) =>
+    request<RecurringInvoiceRun>(
+      `/orgs/${orgId}/entities/${entityId}/recurring-invoices/run?through=${through}`,
+      { method: 'POST', ...json({}) },
+    ),
+
   sessions: () => request<SessionInfo[]>('/auth/sessions'),
   revokeSession: (sessionId: string) =>
     request<void>(`/auth/sessions/${sessionId}`, { method: 'DELETE' }),
