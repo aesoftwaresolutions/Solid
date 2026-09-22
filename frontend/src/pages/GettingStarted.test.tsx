@@ -79,6 +79,7 @@ describe('spec 044: the first ten minutes', () => {
       [`GET ${base}/journal/verify`]: { valid: true, postedEntries: 12, firstInvalidSeq: null },
       [`GET ${base}`]: { id: 'e1', orgId: 'o1', kind: 'smllc', legalName: 'Zeta Shop LLC', fiscalYearEnd: 12, accountingMethod: 'cash', homeState: null, baseCurrency: 'USD' },
       [`PATCH ${base}`]: { id: 'e1', orgId: 'o1', kind: 'smllc', legalName: 'Zeta Shop LLC', fiscalYearEnd: 12, accountingMethod: 'cash', homeState: 'TX', baseCurrency: 'USD' },
+      [`GET ${base}/branding`]: { address: null, phone: null, email: null, website: null, taxId: null, paymentInstructions: null, hasLogo: false },
     });
     render(
       <MemoryRouter initialEntries={['/orgs/o1/entities/e1/settings']}>

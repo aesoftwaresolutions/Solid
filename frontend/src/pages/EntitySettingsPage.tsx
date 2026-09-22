@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { api } from '../api';
+import { api, type Branding } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
 
 const STATES = [
@@ -18,6 +18,17 @@ export default function EntitySettingsPage() {
   const [homeState, setHomeState] = useState('');
   const [accountingMethod, setAccountingMethod] = useState('cash');
   const [saved, setSaved] = useState(false);
+  const branding = useLoader(() => api.branding(orgId, entityId), [orgId, entityId]);
+  const [letterhead, setLetterhead] = useState<Omit<Branding, 'hasLogo'>>({
+    address: '',
+    phone: '',
+    email: '',
+    website: '',
+    taxId: '',
+    paymentInstructions: '',
+  });
+  const [letterheadSaved, setLetterheadSaved] = useState(false);
+  const [letterheadError, setLetterheadError] = useState<unknown>(undefined);
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
 
@@ -28,6 +39,47 @@ export default function EntitySettingsPage() {
       setAccountingMethod(entity.value.accountingMethod);
     }
   }, [entity.value]);
+
+  useEffect(() => {
+    if (branding.value) {
+      const { hasLogo: _hasLogo, ...fields } = branding.value;
+      setLetterhead({
+        address: fields.address ?? '',
+        phone: fields.phone ?? '',
+        email: fields.email ?? '',
+        website: fields.website ?? '',
+        taxId: fields.taxId ?? '',
+        paymentInstructions: fields.paymentInstructions ?? '',
+      });
+    }
+  }, [branding.value]);
+
+  const field = (key: keyof Omit<Branding, 'hasLogo'>) => ({
+    value: letterhead[key] ?? '',
+    onChange: (e: { target: { value: string } }) =>
+      setLetterhead((current) => ({ ...current, [key]: e.target.value })),
+  });
+
+  const saveLetterhead = (event: FormEvent) => {
+    event.preventDefault();
+    setLetterheadError(undefined);
+    setLetterheadSaved(false);
+    api
+      .saveBranding(orgId, entityId, letterhead)
+      .then((updated) => {
+        branding.setValue(updated);
+        setLetterheadSaved(true);
+      })
+      .catch(setLetterheadError);
+  };
+
+  const chooseLogo = (file: File | undefined) => {
+    if (!file) {
+      return;
+    }
+    setLetterheadError(undefined);
+    api.uploadLogo(orgId, entityId, file).then(branding.setValue).catch(setLetterheadError);
+  };
 
   const save = (event: FormEvent) => {
     event.preventDefault();
@@ -106,6 +158,63 @@ export default function EntitySettingsPage() {
           </form>
         </Card>
       )}
+      <Card title="What goes on the documents you send">
+        <p className="muted">
+          Your address, how to reach you and how to be paid. All of it is optional. How to pay appears on
+          invoices and statements only — a quote is not a bill, so it never carries payment instructions.
+        </p>
+        <ErrorMessage error={letterheadError} />
+        <form onSubmit={saveLetterhead}>
+          <label>
+            Your address
+            <textarea rows={4} maxLength={400} {...field('address')} />
+          </label>
+          <label>
+            Phone
+            <input maxLength={60} {...field('phone')} />
+          </label>
+          <label>
+            Email on documents
+            <input maxLength={200} {...field('email')} />
+          </label>
+          <label>
+            Website
+            <input maxLength={200} {...field('website')} />
+          </label>
+          <label>
+            Tax id as you want it printed
+            <input maxLength={60} {...field('taxId')} />
+          </label>
+          <label>
+            How to pay you
+            <textarea rows={3} maxLength={500} {...field('paymentInstructions')} />
+          </label>
+          <button type="submit">Save the letterhead</button>
+          {letterheadSaved && <span role="status"> Saved.</span>}
+        </form>
+        <p>
+          <label>
+            Logo (PNG or JPEG, up to 1 MB)
+            <input type="file" accept="image/png,image/jpeg" onChange={(e) => chooseLogo(e.target.files?.[0])} />
+          </label>
+        </p>
+        {branding.value?.hasLogo && (
+          <p>
+            <img src={api.logoUrl(orgId, entityId)} alt="Your logo" style={{ maxHeight: 60 }} />{' '}
+            <button
+              type="button"
+              onClick={() =>
+                api
+                  .deleteLogo(orgId, entityId)
+                  .then(() => branding.reload())
+                  .catch(setLetterheadError)
+              }
+            >
+              Remove the logo
+            </button>
+          </p>
+        )}
+      </Card>
     </main>
   );
 }

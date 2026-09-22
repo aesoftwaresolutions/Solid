@@ -44,16 +44,19 @@ public class BillingService {
     private final JdbcClient db;
     private final OrgScope orgScope;
     private final OrgService orgs;
+    private final com.aesoftwaresolutions.solid.org.BrandingService branding;
     private final AccountService accounts;
     private final JournalService journal;
     private final SalesTaxService salesTax;
     private final AuditLog audit;
 
-    BillingService(JdbcClient db, OrgScope orgScope, OrgService orgs, AccountService accounts, JournalService journal,
-                   SalesTaxService salesTax, AuditLog audit) {
+    BillingService(JdbcClient db, OrgScope orgScope, OrgService orgs,
+                   com.aesoftwaresolutions.solid.org.BrandingService branding, AccountService accounts,
+                   JournalService journal, SalesTaxService salesTax, AuditLog audit) {
         this.db = db;
         this.orgScope = orgScope;
         this.orgs = orgs;
+        this.branding = branding;
         this.accounts = accounts;
         this.journal = journal;
         this.salesTax = salesTax;
@@ -187,7 +190,18 @@ public class BillingService {
     public byte[] invoicePdf(UUID orgId, UUID entityId, UUID invoiceId) {
         BillingModels.Invoice invoice = getInvoice(orgId, entityId, invoiceId);
         return InvoicePdf.render(orgs.getEntity(orgId, entityId), getCustomer(orgId, entityId, invoice.customerId()),
-                invoice);
+                invoice, branding.get(orgId, entityId), logoBytes(orgId, entityId));
+    }
+
+    /** The entity's logo, or nothing: every document must render without one. */
+    public byte[] logoBytes(UUID orgId, UUID entityId) {
+        return branding.logo(orgId, entityId).map(com.aesoftwaresolutions.solid.org.BrandingService.Logo::bytes)
+                .orElse(null);
+    }
+
+    /** The letterhead, for anything in this module that draws a document. */
+    public com.aesoftwaresolutions.solid.org.Branding letterhead(UUID orgId, UUID entityId) {
+        return branding.get(orgId, entityId);
     }
 
     public BillingModels.Invoice getInvoice(UUID orgId, UUID entityId, UUID invoiceId) {

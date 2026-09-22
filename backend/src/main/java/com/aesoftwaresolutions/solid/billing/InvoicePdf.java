@@ -10,6 +10,7 @@ import static com.aesoftwaresolutions.solid.billing.Pdf.text;
 import static com.aesoftwaresolutions.solid.billing.Pdf.textRight;
 
 import com.aesoftwaresolutions.solid.money.Money;
+import com.aesoftwaresolutions.solid.org.Branding;
 import com.aesoftwaresolutions.solid.org.LegalEntity;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -32,7 +33,8 @@ final class InvoicePdf {
     private InvoicePdf() {
     }
 
-    static byte[] render(LegalEntity entity, BillingModels.Customer customer, BillingModels.Invoice invoice) {
+    static byte[] render(LegalEntity entity, BillingModels.Customer customer, BillingModels.Invoice invoice,
+                         Branding branding, byte[] logo) {
         try (PDDocument document = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             PDPage page = new PDPage(PDRectangle.LETTER);
             document.addPage(page);
@@ -45,7 +47,10 @@ final class InvoicePdf {
                 float y = page.getMediaBox().getHeight() - MARGIN;
 
                 text(content, bold, 18, MARGIN, y, entity.legalName());
-                y -= LINE * 2;
+                y -= LINE + LINE / 2f;
+                y -= Pdf.letterhead(document, content, regular, y, right, branding, logo)
+                        * Pdf.LETTERHEAD_LINE;
+                y -= LINE / 2f;
                 text(content, bold, 14, MARGIN, y, "INVOICE " + (invoice.invoiceNumber() == null
                         ? "(draft)" : invoice.invoiceNumber()));
                 y -= LINE + LINE / 2f;
@@ -74,7 +79,7 @@ final class InvoicePdf {
 
                 for (BillingModels.InvoiceLine line : invoice.lines()) {
                     // Keep room for the totals block; a 200-line invoice must not run off the bottom of the page.
-                    if (y < MARGIN + LINE * 8) {
+                    if (y < MARGIN + LINE * 11) {
                         text(content, regular, 9, MARGIN, y, "continued...");
                         overflow = invoice.lines().subList(invoice.lines().indexOf(line), invoice.lines().size());
                         break;
@@ -112,6 +117,19 @@ final class InvoicePdf {
                 };
                 if (status != null) {
                     text(content, bold, 11, MARGIN, y, status);
+                    y -= LINE * 2;
+                }
+                if (branding != null && branding.paymentInstructions() != null
+                        && !branding.paymentInstructions().isBlank()) {
+                    text(content, regular, 10, MARGIN, y, "How to pay");
+                    y -= LINE;
+                    for (String line : branding.paymentInstructions().split("\\R")) {
+                        if (y < MARGIN + LINE * 2) {
+                            break;
+                        }
+                        text(content, regular, 10, MARGIN, y, fit(regular, line, right - MARGIN));
+                        y -= LINE;
+                    }
                 }
 
                 text(content, regular, 8, MARGIN, MARGIN, "Prepared with Solid");

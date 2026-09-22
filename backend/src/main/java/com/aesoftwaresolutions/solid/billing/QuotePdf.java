@@ -9,6 +9,7 @@ import static com.aesoftwaresolutions.solid.billing.Pdf.stamp;
 import static com.aesoftwaresolutions.solid.billing.Pdf.text;
 import static com.aesoftwaresolutions.solid.billing.Pdf.textRight;
 
+import com.aesoftwaresolutions.solid.org.Branding;
 import com.aesoftwaresolutions.solid.org.LegalEntity;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -33,7 +34,7 @@ final class QuotePdf {
     }
 
     static byte[] render(LegalEntity entity, BillingModels.Customer customer, QuoteModels.Quote quote,
-                         String invoiceNumber) {
+                         String invoiceNumber, Branding branding, byte[] logo) {
         try (PDDocument document = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             PDPage page = new PDPage(PDRectangle.LETTER);
             document.addPage(page);
@@ -46,7 +47,11 @@ final class QuotePdf {
                 float y = page.getMediaBox().getHeight() - MARGIN;
 
                 text(content, bold, 18, MARGIN, y, entity.legalName());
-                y -= LINE * 2;
+                y -= LINE + LINE / 2f;
+                // The letterhead, but never its payment instructions: a quote is not a bill (spec 055).
+                y -= Pdf.letterhead(document, content, regular, y, right, branding, logo)
+                        * Pdf.LETTERHEAD_LINE;
+                y -= LINE / 2f;
                 text(content, bold, 14, MARGIN, y, "QUOTE " + quote.quoteNumber());
                 y -= LINE + LINE / 2f;
 

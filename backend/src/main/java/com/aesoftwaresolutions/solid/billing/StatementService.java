@@ -101,6 +101,7 @@ public class StatementService {
 
     public byte[] statementPdf(UUID orgId, UUID entityId, UUID customerId, LocalDate from, LocalDate to) {
         LegalEntity entity = orgs.getEntity(orgId, entityId);
-        return StatementPdf.render(entity, statement(orgId, entityId, customerId, from, to));
+        return StatementPdf.render(entity, statement(orgId, entityId, customerId, from, to),
+                billing.letterhead(orgId, entityId), billing.logoBytes(orgId, entityId));
     }
 }

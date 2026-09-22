@@ -43,6 +43,18 @@ export interface Entity {
   baseCurrency: string;
 }
 
+/** The letterhead on the documents this entity sends out (spec 056). */
+export interface Branding {
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  taxId: string | null;
+  /** Printed on invoices and statements only — never on a quote. */
+  paymentInstructions: string | null;
+  hasLogo: boolean;
+}
+
 export interface Account {
   id: string;
   code: string;
@@ -1355,6 +1367,19 @@ export const api = {
     `/api/v1/orgs/${orgId}/entities/${entityId}/customers/${customerId}/statement.pdf`,
   invoicePdfUrl: (orgId: string, entityId: string, invoiceId: string) =>
     `/api/v1/orgs/${orgId}/entities/${entityId}/invoices/${invoiceId}/pdf`,
+  branding: (orgId: string, entityId: string) =>
+    request<Branding>(`/orgs/${orgId}/entities/${entityId}/branding`),
+  saveBranding: (orgId: string, entityId: string, body: Omit<Branding, 'hasLogo'>) =>
+    request<Branding>(`/orgs/${orgId}/entities/${entityId}/branding`, { method: 'PUT', ...json(body) }),
+  uploadLogo: (orgId: string, entityId: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<Branding>(`/orgs/${orgId}/entities/${entityId}/branding/logo`, { method: 'PUT', body: form });
+  },
+  deleteLogo: (orgId: string, entityId: string) =>
+    request<void>(`/orgs/${orgId}/entities/${entityId}/branding/logo`, { method: 'DELETE' }),
+  logoUrl: (orgId: string, entityId: string) =>
+    `/api/v1/orgs/${orgId}/entities/${entityId}/branding/logo`,
   quotePdfUrl: (orgId: string, entityId: string, quoteId: string) =>
     `/api/v1/orgs/${orgId}/entities/${entityId}/quotes/${quoteId}/pdf`,
   entityExportUrl: (orgId: string, entityId: string) =>

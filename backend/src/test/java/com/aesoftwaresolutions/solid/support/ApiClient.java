@@ -147,8 +147,18 @@ public class ApiClient {
         return this;
     }
 
+    /** Multipart upload of one file with PUT, for endpoints that replace a single stored file. */
+    public JsonNode putFile(String path, String filename, byte[] content, HttpStatus expected) {
+        return sendFile(HttpMethod.PUT, path, filename, content, expected);
+    }
+
     /** Multipart upload of one file, for the import and document endpoints. */
     public JsonNode postFile(String path, String filename, byte[] content, HttpStatus expected) {
+        return sendFile(HttpMethod.POST, path, filename, content, expected);
+    }
+
+    private JsonNode sendFile(HttpMethod method, String path, String filename, byte[] content,
+                              HttpStatus expected) {
         org.springframework.util.MultiValueMap<String, Object> form = new org.springframework.util.LinkedMultiValueMap<>();
         form.add("file", new org.springframework.core.io.ByteArrayResource(content) {
             @Override
@@ -161,9 +171,10 @@ public class ApiClient {
             headers.setBearerAuth(token);
         }
         headers.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
-        ResponseEntity<JsonNode> response = http.exchange(path, HttpMethod.POST, new HttpEntity<>(form, headers),
+        ResponseEntity<JsonNode> response = http.exchange(path, method, new HttpEntity<>(form, headers),
                 JsonNode.class);
-        assertThat(response.getStatusCode()).as("POST " + path + " -> " + response.getBody()).isEqualTo(expected);
+        assertThat(response.getStatusCode()).as(method + " " + path + " -> " + response.getBody())
+                .isEqualTo(expected);
         return response.getBody();
     }
 

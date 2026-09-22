@@ -1,6 +1,7 @@
 package com.aesoftwaresolutions.solid.billing;
 
 import com.aesoftwaresolutions.solid.money.Money;
+import com.aesoftwaresolutions.solid.org.Branding;
 import com.aesoftwaresolutions.solid.org.LegalEntity;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -22,13 +23,18 @@ final class StatementPdf {
     private StatementPdf() {
     }
 
-    static byte[] render(LegalEntity entity, StatementService.Statement statement) {
+    static byte[] render(LegalEntity entity, StatementService.Statement statement, Branding branding,
+                         byte[] logo) {
         try (PDDocument document = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             var regular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
             var bold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
 
             int rows = Math.max(1, statement.lines().size());
-            int pages = (rows + ROWS_PER_PAGE - 1) / ROWS_PER_PAGE;
+            // The letterhead takes room off the first page, so that page carries fewer rows. Without this a
+            // long statement would run off the bottom the moment someone filled in an address.
+            int firstPageRows = Math.max(10, ROWS_PER_PAGE - letterheadLines(branding, logo));
+            int pages = rows <= firstPageRows ? 1
+                    : 1 + (rows - firstPageRows + ROWS_PER_PAGE - 1) / ROWS_PER_PAGE;
             for (int pageNo = 0; pageNo < pages; pageNo++) {
                 PDPage page = new PDPage(PDRectangle.LETTER);
                 document.addPage(page);
@@ -37,7 +43,12 @@ final class StatementPdf {
                 try (PDPageContentStream content = new PDPageContentStream(document, page)) {
                     float y = page.getMediaBox().getHeight() - MARGIN;
                     text(content, bold, 18, MARGIN, y, entity.legalName());
-                    y -= LINE * 2;
+                    y -= LINE + LINE / 2f;
+                    if (pageNo == 0) {
+                        y -= Pdf.letterhead(document, content, regular, y, right, branding, logo)
+                                * Pdf.LETTERHEAD_LINE;
+                    }
+                    y -= LINE / 2f;
                     text(content, bold, 14, MARGIN, y, "STATEMENT");
                     y -= LINE + LINE / 2f;
                     text(content, regular, 10, MARGIN, y, "For: " + statement.customer().name());
@@ -60,8 +71,9 @@ final class StatementPdf {
                         y -= LINE;
                     }
 
-                    int start = pageNo * ROWS_PER_PAGE;
-                    int end = Math.min(statement.lines().size(), start + ROWS_PER_PAGE);
+                    int start = pageNo == 0 ? 0 : firstPageRows + (pageNo - 1) * ROWS_PER_PAGE;
+                    int end = Math.min(statement.lines().size(),
+                            start + (pageNo == 0 ? firstPageRows : ROWS_PER_PAGE));
                     for (int i = start; i < end; i++) {
                         StatementService.Line line = statement.lines().get(i);
                         text(content, regular, 10, MARGIN, y, line.date().toString());
@@ -83,6 +95,19 @@ final class StatementPdf {
                         text(content, bold, 11, MARGIN + 220, y, "Amount due");
                         textRight(content, bold, 11, right, y,
                                 money(statement.closingBalance()) + " " + statement.currency());
+                        y -= LINE * 2;
+                        if (branding != null && branding.paymentInstructions() != null
+                                && !branding.paymentInstructions().isBlank()) {
+                            text(content, regular, 10, MARGIN, y, "How to pay");
+                            y -= LINE;
+                            for (String instruction : branding.paymentInstructions().split("\\R")) {
+                                if (y < MARGIN + LINE * 2) {
+                                    break;
+                                }
+                                text(content, regular, 10, MARGIN, y, instruction);
+                                y -= LINE;
+                            }
+                        }
                     }
 
                     text(content, regular, 8, MARGIN, MARGIN, "Prepared with Solid");
@@ -93,6 +118,29 @@ final class StatementPdf {
         } catch (IOException e) {
             throw new UncheckedIOException("Could not render the statement", e);
         }
+    }
+
+    /** How many rows' worth of height the letterhead uses on the first page. */
+    private static int letterheadLines(Branding branding, byte[] logo) {
+        int lines = 0;
+        if (branding != null) {
+            if (branding.address() != null && !branding.address().isBlank()) {
+                lines += branding.address().split("\\R").length;
+            }
+            if (!branding.contactLine().isBlank()) {
+                lines++;
+            }
+            if (branding.taxId() != null && !branding.taxId().isBlank()) {
+                lines++;
+            }
+            if (branding.paymentInstructions() != null && !branding.paymentInstructions().isBlank()) {
+                lines += branding.paymentInstructions().split("\\R").length + 2;
+            }
+        }
+        if (logo != null && logo.length > 0) {
+            lines = Math.max(lines, Pdf.LOGO_HEIGHT / Pdf.LETTERHEAD_LINE);
+        }
+        return lines;
     }
 
     private static String money(Money amount) {

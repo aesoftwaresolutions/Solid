@@ -103,7 +103,8 @@ public class QuoteService {
         BillingModels.Customer customer = billing.getCustomer(orgId, entityId, quote.customerId());
         String invoiceNumber = quote.invoiceId() == null ? null
                 : billing.getInvoice(orgId, entityId, quote.invoiceId()).invoiceNumber();
-        return QuotePdf.render(entity, customer, quote, invoiceNumber);
+        return QuotePdf.render(entity, customer, quote, invoiceNumber, billing.letterhead(orgId, entityId),
+                billing.logoBytes(orgId, entityId));
     }
 
     public QuoteModels.Quote send(UUID orgId, UUID entityId, UUID quoteId) {
