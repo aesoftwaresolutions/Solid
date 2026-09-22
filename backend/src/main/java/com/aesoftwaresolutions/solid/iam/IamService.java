@@ -297,12 +297,19 @@ public class IamService {
                 .optional();
     }
 
+    /** Everyone on this installation, for the instance administration screens (spec 048). */
+    public List<User> allUsers() {
+        return db.sql("select id, email, display_name, mfa_enabled, is_instance_admin from iam.user_account "
+                + "order by email")
+                .query(User.class).list();
+    }
+
     public Optional<User> findUser(UUID id) {
         return db.sql("select id, email, display_name, mfa_enabled, is_instance_admin from iam.user_account where id = ?")
                 .param(id).query(User.class).optional();
     }
 
-    Optional<User> findUserByEmail(String email) {
+    public Optional<User> findUserByEmail(String email) {
         return db.sql("select id, email, display_name, mfa_enabled, is_instance_admin from iam.user_account where email = ?")
                 .param(email.trim().toLowerCase(Locale.ROOT)).query(User.class).optional();
     }
@@ -337,6 +344,11 @@ public class IamService {
     }
 
     private static void validatePassword(String password) {
+        validatePasswordRules(password);
+    }
+
+    /** The one place the password rules live, so changing and resetting cannot drift from signing up. */
+    public static void validatePasswordRules(String password) {
         if (password == null || password.length() < 12 || password.length() > 128) {
             throw new IllegalArgumentException("Password must be 12 to 128 characters");
         }

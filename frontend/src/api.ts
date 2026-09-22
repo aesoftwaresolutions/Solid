@@ -1102,6 +1102,17 @@ export const api = {
     request<{ valid: boolean; postedEntries: number; firstInvalidSeq: number | null }>(
       `/orgs/${orgId}/entities/${entityId}/journal/verify`,
     ),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>('/auth/change-password', { method: 'POST', ...json({ currentPassword, newPassword }) }),
+  resetPassword: (token: string, newPassword: string) =>
+    request<void>('/auth/reset-password', { method: 'POST', ...json({ token, newPassword }) }),
+  instanceUsers: () => request<User[]>('/instance/users'),
+  issuePasswordReset: (userId: string) =>
+    request<{ userId: string; email: string; expiresAt: string; token: string; resetPath: string }>(
+      `/instance/users/${userId}/password-reset`,
+      { method: 'POST', ...json({}) },
+    ),
+
   changeMemberRole: (orgId: string, userId: string, role: string) =>
     request<Member>(`/orgs/${orgId}/members/${userId}`, { method: 'PATCH', ...json({ role }) }),
   removeMember: (orgId: string, userId: string) =>

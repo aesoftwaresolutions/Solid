@@ -41,6 +41,7 @@ function renderPage() {
 describe('spec 027: instance admin area', () => {
   test('shows version, backup readiness and the rule packs', async () => {
     mockApi({
+      'GET /api/v1/instance/users': [],
       'GET /api/v1/system/info': { name: 'Solid', version: '0.1.0', databaseSchemaVersion: '202609180003' },
       'GET /api/v1/system/backup-status': status,
       'GET /api/v1/tax/rule-packs': packs,
@@ -65,7 +66,8 @@ describe('spec 027: instance admin area', () => {
   test('a non-administrator gets an explanation and the rest of the page', async () => {
     mockApi(
       {
-        'GET /api/v1/system/info': { name: 'Solid', version: '0.1.0', databaseSchemaVersion: '202609180003' },
+        'GET /api/v1/instance/users': [],
+      'GET /api/v1/system/info': { name: 'Solid', version: '0.1.0', databaseSchemaVersion: '202609180003' },
         'GET /api/v1/system/backup-status': { detail: 'Only an instance administrator can see the backup status', status: 403 },
         'GET /api/v1/tax/rule-packs': packs,
       },

@@ -60,13 +60,34 @@ public class ApiClient {
      * account has no MFA yet, so this enrols it the way the real screens would.
      */
     public ApiClient loginExisting(String existingEmail, String password) {
+        return loginExisting(existingEmail, password, null);
+    }
+
+    /**
+     * @param knownSecret that user's MFA secret when they already have one (a second session for the same
+     *                    person); null for an account that has never enrolled, which this then enrols
+     */
+    public ApiClient loginExisting(String existingEmail, String password, byte[] knownSecret) {
         this.email = existingEmail;
-        this.token = post("/api/v1/auth/login", Map.of("email", existingEmail, "password", password),
-                HttpStatus.OK).get("token").asText();
-        this.mfaSecret = Base32.decode(post("/api/v1/auth/mfa/enroll", Map.of(), HttpStatus.OK)
-                .get("secret").asText());
-        post("/api/v1/auth/mfa/activate", Map.of("code", Totp.codeAt(mfaSecret, Totp.stepAt(Instant.now()))),
+        JsonNode login = post("/api/v1/auth/login", Map.of("email", existingEmail, "password", password),
                 HttpStatus.OK);
+        this.token = login.get("token").asText();
+        if (login.get("mfaEnrolled").asBoolean()) {
+            if (knownSecret == null) {
+                throw new IllegalArgumentException("That account already has MFA; pass its secret");
+            }
+            this.mfaSecret = knownSecret;
+            // The current step's code may already have been spent by this user's other session, and a code
+            // can only be used once; the next step is inside the accepted window.
+            post("/api/v1/auth/mfa/verify",
+                    Map.of("code", Totp.codeAt(mfaSecret, Totp.stepAt(Instant.now()) + 1)),
+                    HttpStatus.NO_CONTENT);
+        } else {
+            this.mfaSecret = Base32.decode(post("/api/v1/auth/mfa/enroll", Map.of(), HttpStatus.OK)
+                    .get("secret").asText());
+            post("/api/v1/auth/mfa/activate", Map.of("code", Totp.codeAt(mfaSecret, Totp.stepAt(Instant.now()))),
+                    HttpStatus.OK);
+        }
         return this;
     }
 

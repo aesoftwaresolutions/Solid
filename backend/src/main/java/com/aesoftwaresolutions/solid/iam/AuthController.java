@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -34,9 +35,12 @@ class AuthController {
     private final IamService iam;
     private final MembershipService memberships;
     private final InvitationService invitations;
+    private final PasswordService passwords;
 
-    AuthController(IamService iam, MembershipService memberships, InvitationService invitations) {
+    AuthController(IamService iam, MembershipService memberships, InvitationService invitations,
+                   PasswordService passwords) {
         this.invitations = invitations;
+        this.passwords = passwords;
         this.iam = iam;
         this.memberships = memberships;
     }
@@ -54,6 +58,28 @@ class AuthController {
     InvitationService.Acceptance acceptInvitation(@Valid @RequestBody AcceptInvitationRequest body,
                                                   HttpServletRequest request) {
         return invitations.accept(body.token(), body.displayName(), body.password(), ClientIp.of(request));
+    }
+
+    record ChangePasswordRequest(@NotBlank String currentPassword, @NotBlank String newPassword) {
+    }
+
+    record ResetPasswordRequest(@NotBlank String token, @NotBlank String newPassword) {
+    }
+
+    @PostMapping("/change-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void changePassword(@Valid @RequestBody ChangePasswordRequest body, HttpServletRequest request) {
+        passwords.change(CurrentUser.require(), body.currentPassword(), body.newPassword(), ClientIp.of(request));
+    }
+
+    /**
+     * Spends a reset link. Unauthenticated, because the whole point is that the person cannot sign in — and
+     * it grants nothing: they still have to log in, and still have to pass MFA.
+     */
+    @PostMapping("/reset-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void resetPassword(@Valid @RequestBody ResetPasswordRequest body, HttpServletRequest request) {
+        passwords.useReset(body.token(), body.newPassword(), ClientIp.of(request));
     }
 
     @PostMapping("/signup")

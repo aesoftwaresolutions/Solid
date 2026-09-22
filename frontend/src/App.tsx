@@ -2,6 +2,7 @@ import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useAuth } from './auth';
 import { Loading } from './components';
 import AcceptInvitationPage from './pages/AcceptInvitationPage';
+import AccountPage from './pages/AccountPage';
 import AccountsPage from './pages/AccountsPage';
 import AssetsPage from './pages/AssetsPage';
 import BankPage from './pages/BankPage';
@@ -20,6 +21,7 @@ import OrganizationsPage from './pages/OrganizationsPage';
 import PurchasesPage from './pages/PurchasesPage';
 import ReconcilePage from './pages/ReconcilePage';
 import ReportsPage from './pages/ReportsPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import SalesPage from './pages/SalesPage';
 import SearchPage from './pages/SearchPage';
 
@@ -64,13 +66,16 @@ function Shell() {
           <Route path="*" element={null} />
         </Routes>
         <span className="spacer" />
-        <span className="muted">{email}</span>
+        <Link to="/account" className="muted">
+          {email}
+        </Link>
         <button type="button" className="secondary" onClick={() => void logout()}>
           Sign out
         </button>
       </nav>
       <Routes>
         <Route path="/" element={<OrganizationsPage />} />
+        <Route path="/account" element={<AccountPage />} />
         <Route path="/instance" element={<InstancePage />} />
         <Route path="/orgs/:orgId" element={<EntitiesPage />} />
         <Route path="/orgs/:orgId/settings" element={<OrganizationPage />} />
@@ -98,11 +103,13 @@ function Shell() {
 export default function App() {
   const { state } = useAuth();
 
-  // An invitation link is for someone with no account yet, so it is reachable before the sign-in gate.
-  if (window.location.pathname === '/accept-invitation') {
+  // An invitation link is for someone with no account yet, and a reset link is for someone who cannot sign
+  // in: both are reachable before the sign-in gate.
+  if (window.location.pathname === '/accept-invitation' || window.location.pathname === '/reset-password') {
     return (
       <Routes>
         <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Routes>
     );
   }

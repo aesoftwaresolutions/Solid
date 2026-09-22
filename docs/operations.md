@@ -83,6 +83,27 @@ docker compose up -d --build
 Flyway applies new migrations at startup, so take a backup first (the step above takes seconds). Migrations are
 append-only, so a newer database cannot be served by an older application — roll forward, or restore the backup.
 
+## When someone cannot sign in
+
+Solid sends no email, so there is no "forgot password" message. There are two ways back in, in order of
+preference:
+
+1. **An instance administrator makes a link.** On the installation page, find the person under "People on
+   this installation" and press *Make a reset link*. Copy it and give it to them however you already talk.
+   It lasts an hour, works once, and does not turn off their authenticator app.
+2. **Nobody can sign in at all** — the last administrator is locked out. Whoever has the server runs it once
+   with the account's address:
+
+   ```bash
+   docker compose run --rm app java -jar /app/app.jar --solid.reset-password=you@example.com
+   ```
+
+   It prints a reset link and exits without serving anything. Open the link on the running instance.
+
+Neither path touches two-factor authentication: signing in still needs the authenticator code, or one of the
+recovery codes printed when it was set up. If those are gone too, the account cannot be recovered — make a
+new one and move the membership across.
+
 ## Checking the stack actually works
 
 After an upgrade — or after a restore, or any time you want to be sure — run the smoke test from outside:

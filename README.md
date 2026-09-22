@@ -20,7 +20,7 @@ Sign in (with mandatory two-factor), create an organization and its entities, an
 | **Documents** | An encrypted vault for receipts and paperwork, linked to the records they support |
 | **Reports** | Trial balance, P&L, balance sheet, statement of cash flows, tax-line report with a readiness check, year-end checklist, full CSV export |
 | **Across entities** | One page for the whole organization: cash, net income and what is waiting, per entity, with a total only when the currencies match |
-| **People** | Invitations with single-use, hashed, expiring links; roles that can be changed and access that can be taken away, with the last owner protected |
+| **People** | Invitations with single-use, hashed, expiring links; roles that can be changed and access taken away, with the last owner protected; password change, administrator-issued resets, and a command-line way back in |
 | **Getting started** | A setup list computed from the books themselves — what is done, what is next, what is genuinely optional — plus per-entity settings |
 | **Search** | One box across journal entries, accounts, bank transactions, customers, invoices, vendors, bills and documents — by text or by exact amount |
 | **Moving in** | CSV import of a chart of accounts, customer list or vendor list: previewed first, all-or-nothing, safe to re-run |

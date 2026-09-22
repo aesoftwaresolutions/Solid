@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, api } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
@@ -17,6 +18,9 @@ export default function InstancePage() {
   const info = useLoader(() => api.systemInfo(), []);
   const backup = useLoader(() => api.backupStatus(), []);
   const packs = useLoader(() => api.taxRulePacks(), []);
+  const users = useLoader(() => api.instanceUsers(), []);
+  const [resetLink, setResetLink] = useState<{ email: string; link: string } | null>(null);
+  const [resetError, setResetError] = useState<unknown>(undefined);
 
   const forbidden = backup.error instanceof ApiError && backup.error.status === 403;
 
@@ -26,6 +30,68 @@ export default function InstancePage() {
       <p>
         <Link to="/">Back to organizations</Link>
       </p>
+
+      <Card title="People on this installation">
+        <ErrorMessage error={users.error instanceof ApiError && users.error.status === 403 ? undefined : users.error} />
+        {users.error instanceof ApiError && users.error.status === 403 && (
+          <p className="muted">Only an instance administrator can see who has an account here.</p>
+        )}
+        {users.value && (
+          <>
+            <p className="muted">
+              Solid sends no email, so this is how someone who has forgotten their password gets back in: make
+              a link and pass it to them. It lasts an hour, works once, and does not turn off their
+              authenticator.
+            </p>
+            <ErrorMessage error={resetError} />
+            <table>
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Name</th>
+                  <th>MFA</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {users.value.map((user) => (
+                  <tr key={user.id}>
+                    <td>{user.email}</td>
+                    <td>{user.displayName}{user.isInstanceAdmin ? ' (administrator)' : ''}</td>
+                    <td>{user.mfaEnabled ? 'on' : 'not set up'}</td>
+                    <td>
+                      <button
+                        type="button"
+                        aria-label={`Reset password for ${user.email}`}
+                        onClick={() => {
+                          setResetError(undefined);
+                          api
+                            .issuePasswordReset(user.id)
+                            .then((reset) =>
+                              setResetLink({
+                                email: reset.email,
+                                link: `${window.location.origin}${reset.resetPath}`,
+                              }),
+                            )
+                            .catch(setResetError);
+                        }}
+                      >
+                        Make a reset link
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {resetLink && (
+              <p role="status">
+                Link for {resetLink.email} — copy it now, it is shown once:{' '}
+                <input readOnly value={resetLink.link} aria-label="Reset link" size={60} onFocus={(e) => e.target.select()} />
+              </p>
+            )}
+          </>
+        )}
+      </Card>
 
       <Card title="Version">
         <ErrorMessage error={info.error} />

@@ -50,7 +50,9 @@ class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/signup", "/api/v1/auth/login",
                                 // Accepting an invitation is how someone without an account gets one.
-                                "/api/v1/auth/accept-invitation").permitAll()
+                                "/api/v1/auth/accept-invitation",
+                                // Spending a reset token: the person cannot sign in, which is the point.
+                                "/api/v1/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/system/info").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/health", "/error").permitAll()
                         .requestMatchers("/api/v1/auth/mfa/**", "/api/v1/auth/logout", "/api/v1/auth/me")
