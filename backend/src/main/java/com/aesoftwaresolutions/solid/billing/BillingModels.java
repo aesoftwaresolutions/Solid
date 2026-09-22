@@ -24,11 +24,28 @@ public final class BillingModels {
     /**
      * @param total   what the customer owes: the lines plus any sales tax
      * @param taxTotal sales tax charged — money held for the state, never income
+     * @param creditsApplied credit notes pointed at this invoice; money that was never owed rather than paid
      */
     public record Invoice(UUID id, UUID entityId, UUID customerId, String invoiceNumber, LocalDate issueDate,
                           LocalDate dueDate, String terms, String memo, Money total, Money amountPaid,
                           Money balanceDue, String status, UUID journalEntryId, List<InvoiceLine> lines,
-                          Money taxTotal) {
+                          Money taxTotal, Money creditsApplied) {
+    }
+
+    public record CreditNoteLine(UUID id, int lineNo, String description, BigDecimal quantity, Money unitPrice,
+                                 Money amount, UUID incomeAccountId) {
+    }
+
+    public record CreditApplication(UUID id, UUID invoiceId, String invoiceNumber, Money amount) {
+    }
+
+    /**
+     * @param applied   how much of this credit has been pointed at invoices
+     * @param remaining what is left to point somewhere
+     */
+    public record CreditNote(UUID id, UUID customerId, String customerName, String creditNumber, LocalDate issueDate,
+                             String memo, Money total, String status, UUID journalEntryId, Money applied,
+                             Money remaining, List<CreditNoteLine> lines, List<CreditApplication> applications) {
     }
 
     public record PaymentApplication(UUID invoiceId, Money amount) {

@@ -179,6 +179,30 @@ export interface Invoice {
   balanceDue: Money;
   status: string;
   lines: InvoiceLine[];
+  /** Credit notes pointed at this invoice: money that was never owed rather than money that arrived. */
+  creditsApplied: Money;
+}
+
+export interface CreditApplication {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string | null;
+  amount: Money;
+}
+
+export interface CreditNote {
+  id: string;
+  customerId: string;
+  customerName: string;
+  creditNumber: string;
+  issueDate: string;
+  memo: string | null;
+  total: Money;
+  status: string;
+  applied: Money;
+  remaining: Money;
+  lines: InvoiceLine[];
+  applications: CreditApplication[];
 }
 
 export interface Vendor {
@@ -1367,6 +1391,38 @@ export const api = {
     `/api/v1/orgs/${orgId}/entities/${entityId}/customers/${customerId}/statement.pdf`,
   invoicePdfUrl: (orgId: string, entityId: string, invoiceId: string) =>
     `/api/v1/orgs/${orgId}/entities/${entityId}/invoices/${invoiceId}/pdf`,
+  creditNotes: (orgId: string, entityId: string) =>
+    request<CreditNote[]>(`/orgs/${orgId}/entities/${entityId}/credit-notes`),
+  createCreditNote: (
+    orgId: string,
+    entityId: string,
+    body: {
+      customerId: string;
+      issueDate: string;
+      memo?: string;
+      lines: { description: string; quantity: string; unitPrice: Money; incomeAccountId: string }[];
+    },
+  ) =>
+    request<CreditNote>(`/orgs/${orgId}/entities/${entityId}/credit-notes`, {
+      method: 'POST',
+      ...json(body),
+    }),
+  creditNoteAction: (orgId: string, entityId: string, creditNoteId: string, action: 'issue' | 'void') =>
+    request<CreditNote>(`/orgs/${orgId}/entities/${entityId}/credit-notes/${creditNoteId}/${action}`, {
+      method: 'POST',
+      ...json({}),
+    }),
+  applyCreditNote: (orgId: string, entityId: string, creditNoteId: string, invoiceId: string, amount: Money) =>
+    request<CreditNote>(`/orgs/${orgId}/entities/${entityId}/credit-notes/${creditNoteId}/applications`, {
+      method: 'POST',
+      ...json({ invoiceId, amount }),
+    }),
+  unapplyCreditNote: (orgId: string, entityId: string, creditNoteId: string, applicationId: string) =>
+    request<void>(
+      `/orgs/${orgId}/entities/${entityId}/credit-notes/${creditNoteId}/applications/${applicationId}`,
+      { method: 'DELETE' },
+    ),
+
   branding: (orgId: string, entityId: string) =>
     request<Branding>(`/orgs/${orgId}/entities/${entityId}/branding`),
   saveBranding: (orgId: string, entityId: string, body: Omit<Branding, 'hasLogo'>) =>

@@ -58,6 +58,7 @@ describe('spec 017 AC 1-3: sales', () => {
       [`GET ${base}/sales-tax-rates`]: [],
       [`GET ${base}/recurring-invoices`]: [],
       [`GET ${base}/quotes`]: [],
+      [`GET ${base}/credit-notes`]: [],
       [`GET ${base}/reports/sales-tax`]: { from: '2026-01-01', to: '2026-09-19', currency: 'USD', jurisdictions: [], totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note' },
       [`POST ${base}/invoices`]: () => {
         invoices = [draft];
@@ -116,6 +117,7 @@ describe('spec 017 AC 1-3: sales', () => {
         [`GET ${base}/sales-tax-rates`]: [],
       [`GET ${base}/recurring-invoices`]: [],
       [`GET ${base}/quotes`]: [],
+      [`GET ${base}/credit-notes`]: [],
         [`GET ${base}/reports/sales-tax`]: { from: '2026-01-01', to: '2026-09-19', currency: 'USD', jurisdictions: [], totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note' },
         [`POST ${base}/invoices/i1/finalize`]: { detail: 'The period is locked', code: 'PERIOD_LOCKED', status: 409 },
       },
@@ -291,6 +293,7 @@ describe('spec 037: sales tax on the sales page', () => {
       [`GET ${base}/sales-tax-rates`]: () => rates,
       [`GET ${base}/recurring-invoices`]: [],
       [`GET ${base}/quotes`]: [],
+      [`GET ${base}/credit-notes`]: [],
       [`GET ${base}/reports/sales-tax`]: {
         from: '2026-01-01', to: '2026-09-19', currency: 'USD',
         jurisdictions: [{ jurisdiction: 'Springfield, IL', ratePercent: '8.2500', taxableSales: money('1000.00'), taxCollected: money('82.50') }],
@@ -403,6 +406,7 @@ describe('spec 052: invoices that repeat', () => {
       },
       [`GET ${base}/recurring-invoices`]: [template],
       [`GET ${base}/quotes`]: [],
+      [`GET ${base}/credit-notes`]: [],
       ...routes,
     });
     render(
@@ -477,6 +481,7 @@ describe('spec 054: quotes', () => {
       },
       [`GET ${base}/recurring-invoices`]: [],
       [`GET ${base}/quotes`]: [quote],
+      [`GET ${base}/credit-notes`]: [],
       ...routes,
     });
     render(
@@ -513,6 +518,87 @@ describe('spec 054: quotes', () => {
       expect(calls.find((c) => c.key === `POST ${base}/quotes`)?.body).toMatchObject({
         customerId: 'c1',
         lines: [{ description: 'New website', quantity: '1' }],
+      }),
+    );
+  });
+});
+
+describe('spec 057: credit notes', () => {
+  const customer = { id: 'c1', name: 'Northwind Traders', email: null, phone: null, isArchived: false };
+  const openInvoice = {
+    id: 'i1', customerId: 'c1', invoiceNumber: 'INV-0001', issueDate: '2026-09-01', dueDate: '2026-10-01',
+    terms: 'net_30', memo: null, total: money('1000.00'), amountPaid: money('0.00'),
+    creditsApplied: money('0.00'), balanceDue: money('1000.00'), status: 'open', lines: [],
+  };
+  const credit = {
+    id: 'cn1', customerId: 'c1', customerName: 'Northwind Traders', creditNumber: 'CN-0001',
+    issueDate: '2026-09-22', memo: null, total: money('250.00'), status: 'issued',
+    applied: money('0.00'), remaining: money('250.00'), lines: [], applications: [],
+  };
+
+  function renderSales(routes: Record<string, unknown> = {}, creditNotes: unknown[] = [credit]) {
+    const mocked = mockApi({
+      [`GET ${base}/accounts`]: accounts,
+      [`GET ${base}/customers`]: [customer],
+      [`GET ${base}/invoices`]: [openInvoice],
+      [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
+      [`GET ${base}/sales-tax-rates`]: [],
+      [`GET ${base}/reports/sales-tax`]: {
+        from: '2026-01-01', to: '2026-09-22', currency: 'USD', jurisdictions: [],
+        totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note',
+      },
+      [`GET ${base}/recurring-invoices`]: [],
+      [`GET ${base}/quotes`]: [],
+      [`GET ${base}/credit-notes`]: creditNotes,
+      ...routes,
+    });
+    render(
+      <MemoryRouter initialEntries={['/orgs/o1/entities/e1/sales']}>
+        <Routes>
+          <Route path="/orgs/:orgId/entities/:entityId/sales" element={<SalesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    return mocked;
+  }
+
+  test('an issued credit can be applied to that customer\'s open invoice', async () => {
+    const { calls } = renderSales({
+      [`POST ${base}/credit-notes/cn1/applications`]: { ...credit, applied: money('250.00'), remaining: money('0.00') },
+    });
+
+    expect(await screen.findByText('CN-0001')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    await waitFor(() =>
+      expect(calls.find((c) => c.key === `POST ${base}/credit-notes/cn1/applications`)?.body).toMatchObject({
+        invoiceId: 'i1',
+        amount: { amount: '250.00', currency: 'USD' },
+      }),
+    );
+  });
+
+  test('a draft is issued from the list, and the form drafts a new one', async () => {
+    const draft = { ...credit, id: 'cn2', creditNumber: 'CN-0002', status: 'draft' };
+    const { calls } = renderSales(
+      {
+        [`POST ${base}/credit-notes/cn2/issue`]: { ...draft, status: 'issued' },
+        [`POST ${base}/credit-notes`]: { ...draft, id: 'cn3' },
+      },
+      [draft],
+    );
+
+    fireEvent.click(await screen.findByLabelText('Issue CN-0002'));
+    await waitFor(() => expect(calls.some((c) => c.key === `POST ${base}/credit-notes/cn2/issue`)).toBe(true));
+
+    fireEvent.change(screen.getByLabelText('What the credit is for'), { target: { value: 'Overcharged' } });
+    fireEvent.change(screen.getByLabelText('Amount to credit'), { target: { value: '250.00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save the credit note' }));
+
+    await waitFor(() =>
+      expect(calls.find((c) => c.key === `POST ${base}/credit-notes`)?.body).toMatchObject({
+        customerId: 'c1',
+        lines: [{ description: 'Overcharged', quantity: '1' }],
       }),
     );
   });

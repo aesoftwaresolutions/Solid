@@ -102,6 +102,10 @@ final class InvoicePdf {
                 y -= LINE;
                 total(content, regular, bold, right, y, "Paid", invoice.amountPaid());
                 y -= LINE;
+                if (invoice.creditsApplied().isPositive()) {
+                    total(content, regular, bold, right, y, "Credited", invoice.creditsApplied());
+                    y -= LINE;
+                }
                 total(content, bold, bold, right, y, "Amount due", invoice.balanceDue());
                 y -= LINE * 2;
 

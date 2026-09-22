@@ -4,6 +4,7 @@ import {
   api,
   formatMoney,
   type Account,
+  type CreditNote,
   type Customer,
   type Invoice,
   type Money,
@@ -30,6 +31,7 @@ export default function SalesPage() {
 
   const recurring = useLoader(() => api.recurringInvoices(orgId, entityId), [orgId, entityId]);
   const quotes = useLoader(() => api.quotes(orgId, entityId), [orgId, entityId]);
+  const creditNotes = useLoader(() => api.creditNotes(orgId, entityId), [orgId, entityId]);
 
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
@@ -258,6 +260,86 @@ export default function SalesPage() {
                       >
                         Make an invoice
                       </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      <Card title="Credit notes">
+        <ErrorMessage error={creditNotes.error} />
+        <p className="muted">
+          Taking money off what a customer owes without pretending the invoice never happened. Issuing one puts
+          it in the books straight away; pointing it at an invoice afterwards changes what is outstanding but
+          posts nothing more.
+        </p>
+        {customers.value && customers.value.length > 0 && incomeAccounts.length > 0 && (
+          <NewCreditNote
+            orgId={orgId}
+            entityId={entityId}
+            customers={customers.value}
+            incomeAccounts={incomeAccounts}
+            onCreated={creditNotes.reload}
+          />
+        )}
+        {creditNotes.value && creditNotes.value.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Number</th>
+                <th>Customer</th>
+                <th className="money">Total</th>
+                <th className="money">Left to use</th>
+                <th>Status</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {creditNotes.value.map((credit) => (
+                <tr key={credit.id}>
+                  <td>{credit.creditNumber}</td>
+                  <td>{credit.customerName}</td>
+                  <td className="money">{formatMoney(credit.total)}</td>
+                  <td className="money">{formatMoney(credit.remaining)}</td>
+                  <td>{credit.status}</td>
+                  <td>
+                    {credit.status === 'draft' && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label={`Issue ${credit.creditNumber}`}
+                        onClick={() =>
+                          act(
+                            api
+                              .creditNoteAction(orgId, entityId, credit.id, 'issue')
+                              .then(creditNotes.reload),
+                          )
+                        }
+                      >
+                        Issue
+                      </button>
+                    )}
+                    {credit.status === 'issued' && credit.remaining.amount !== '0.00' && (
+                      <ApplyCredit
+                        orgId={orgId}
+                        entityId={entityId}
+                        credit={credit}
+                        invoices={(invoices.value ?? []).filter(
+                          (invoice) =>
+                            invoice.customerId === credit.customerId &&
+                            invoice.status !== 'draft' &&
+                            invoice.status !== 'void' &&
+                            invoice.balanceDue.amount !== '0.00',
+                        )}
+                        onApplied={() => {
+                          creditNotes.reload();
+                          invoices.reload();
+                          aging.reload();
+                        }}
+                      />
                     )}
                   </td>
                 </tr>
@@ -978,6 +1060,149 @@ function NewQuote({
       </label>
       <button type="submit" disabled={busy}>
         Save the quote
+      </button>
+    </form>
+  );
+}
+
+/** A one-line credit note, drafted the same way a one-line invoice is. */
+function NewCreditNote({
+  orgId,
+  entityId,
+  customers,
+  incomeAccounts,
+  onCreated,
+}: {
+  orgId: string;
+  entityId: string;
+  customers: Customer[];
+  incomeAccounts: Account[];
+  onCreated: () => void;
+}) {
+  const [customerId, setCustomerId] = useState('');
+  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState('');
+  const [incomeAccountId, setIncomeAccountId] = useState('');
+  const [error, setError] = useState<unknown>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  const chosenCustomer = customerId || customers[0]?.id || '';
+  const chosenAccount = incomeAccountId || incomeAccounts[0]?.id || '';
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError(undefined);
+        const unitPrice: Money = { amount: amount.trim(), currency: 'USD' };
+        api
+          .createCreditNote(orgId, entityId, {
+            customerId: chosenCustomer,
+            issueDate: today(),
+            lines: [
+              { description: description.trim(), quantity: '1', unitPrice, incomeAccountId: chosenAccount },
+            ],
+          })
+          .then(() => {
+            setDescription('');
+            setAmount('');
+            onCreated();
+          })
+          .catch(setError)
+          .finally(() => setBusy(false));
+      }}
+    >
+      <ErrorMessage error={error} />
+      <label>
+        Customer to credit
+        <select value={chosenCustomer} onChange={(e) => setCustomerId(e.target.value)}>
+          {customers.map((customer) => (
+            <option key={customer.id} value={customer.id}>
+              {customer.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        What the credit is for
+        <input value={description} required maxLength={300} onChange={(e) => setDescription(e.target.value)} />
+      </label>
+      <label>
+        Amount to credit
+        <input value={amount} required inputMode="decimal" onChange={(e) => setAmount(e.target.value)} />
+      </label>
+      <label>
+        Income account to take it back out of
+        <select value={chosenAccount} onChange={(e) => setIncomeAccountId(e.target.value)}>
+          {incomeAccounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.code} {account.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" disabled={busy}>
+        Save the credit note
+      </button>
+    </form>
+  );
+}
+
+/** Points an issued credit at one of that customer's open invoices. */
+function ApplyCredit({
+  orgId,
+  entityId,
+  credit,
+  invoices,
+  onApplied,
+}: {
+  orgId: string;
+  entityId: string;
+  credit: CreditNote;
+  invoices: Invoice[];
+  onApplied: () => void;
+}) {
+  const [invoiceId, setInvoiceId] = useState('');
+  const [amount, setAmount] = useState(credit.remaining.amount);
+  const [error, setError] = useState<unknown>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  if (invoices.length === 0) {
+    return <span className="muted">nothing open to put it against</span>;
+  }
+  const chosen = invoiceId || invoices[0].id;
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError(undefined);
+        api
+          .applyCreditNote(orgId, entityId, credit.id, chosen, { amount: amount.trim(), currency: 'USD' })
+          .then(onApplied)
+          .catch(setError)
+          .finally(() => setBusy(false));
+      }}
+    >
+      <ErrorMessage error={error} />
+      <label>
+        {`Invoice for ${credit.creditNumber}`}
+        <select value={chosen} onChange={(e) => setInvoiceId(e.target.value)}>
+          {invoices.map((invoice) => (
+            <option key={invoice.id} value={invoice.id}>
+              {invoice.invoiceNumber ?? invoice.id.slice(0, 8)} — {formatMoney(invoice.balanceDue)} left
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {`Amount of ${credit.creditNumber} to use`}
+        <input value={amount} required inputMode="decimal" onChange={(e) => setAmount(e.target.value)} />
+      </label>
+      <button type="submit" disabled={busy}>
+        Apply
       </button>
     </form>
   );

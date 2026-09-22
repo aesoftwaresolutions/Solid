@@ -60,5 +60,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 054 | Quotes that become invoices | [054](054-quotes.md) | Done (owner review) | 012 |
 | 055 | Sending the quote | [055](055-quote-pdf.md) | Done (owner review) | 031, 054 |
 | 056 | The letterhead | [056](056-letterhead.md) | Done (owner review) | 031, 032, 055 |
+| 057 | Crediting a customer | [057](057-credit-notes.md) | Done (owner review; CPA review needed) | 012, 032 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

@@ -24,11 +24,13 @@ public class StatementService {
     }
 
     private final BillingService billing;
+    private final CreditNoteService credits;
     private final OrgService orgs;
     private final Clock clock;
 
-    StatementService(BillingService billing, OrgService orgs, Clock clock) {
+    StatementService(BillingService billing, CreditNoteService credits, OrgService orgs, Clock clock) {
         this.billing = billing;
+        this.credits = credits;
         this.orgs = orgs;
         this.clock = clock;
     }
@@ -67,9 +69,20 @@ public class StatementService {
             }
         }
 
+        // An issued credit note reduces what this customer owes from the day it was issued, whether or not it
+        // has been pointed at a particular invoice — so the statement counts it like a payment.
+        record Credit(LocalDate date, String reference, long minor) {
+        }
+        List<Credit> creditNotes = credits.list(orgId, entityId).stream()
+                .filter(credit -> credit.customerId().equals(customerId))
+                .filter(credit -> credit.status().equals("issued"))
+                .map(credit -> new Credit(credit.issueDate(), credit.creditNumber(), credit.total().minorUnits()))
+                .toList();
+
         long opening = invoices.stream().filter(i -> i.issueDate().isBefore(start))
                 .mapToLong(i -> i.total().minorUnits()).sum()
-                - payments.stream().filter(p -> p.date().isBefore(start)).mapToLong(Applied::minor).sum();
+                - payments.stream().filter(p -> p.date().isBefore(start)).mapToLong(Applied::minor).sum()
+                - creditNotes.stream().filter(c -> c.date().isBefore(start)).mapToLong(Credit::minor).sum();
 
         // Invoices before payments on the same day, so a balance is never reduced before it is shown.
         record Event(LocalDate date, int order, String type, String reference, String description, long charge,
@@ -84,6 +97,9 @@ public class StatementService {
                 .forEach(p -> events.add(new Event(p.date(), 1, "payment",
                         p.reference() != null ? p.reference() : p.paymentId().toString().substring(0, 8),
                         "Payment received", 0, p.minor())));
+        creditNotes.stream().filter(c -> !c.date().isBefore(start) && !c.date().isAfter(end))
+                .forEach(c -> events.add(new Event(c.date(), 1, "credit_note", c.reference(),
+                        "Credit note", 0, c.minor())));
         events.sort(Comparator.comparing(Event::date).thenComparing(Event::order).thenComparing(Event::reference));
 
         List<Line> lines = new ArrayList<>(events.size());

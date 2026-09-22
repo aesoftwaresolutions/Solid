@@ -252,6 +252,10 @@ public class BillingService {
                 throw new BusinessRuleException("INVOICE_HAS_PAYMENTS",
                         "Remove the payments applied to this invoice before voiding it");
             }
+            if (invoice.creditsApplied().isPositive()) {
+                throw new BusinessRuleException("INVOICE_HAS_CREDITS",
+                        "Unapply the credit notes pointed at this invoice before voiding it");
+            }
             journal.reverse(orgId, entityId, invoice.journalEntryId(), null, "Void invoice " + invoice.invoiceNumber());
             db.sql("update ar_ap.invoice set status = 'void' where id = ?").param(invoiceId).update();
             return loadInvoice(entityId, invoiceId);
@@ -336,7 +340,11 @@ public class BillingService {
                     select i.id, i.due_date, i.total_minor, c.id as customer_id, c.name as customer_name,
                            coalesce((select sum(pa.amount_minor) from ar_ap.payment_application pa
                                      join ar_ap.payment p on p.id = pa.payment_id
-                                     where pa.invoice_id = i.id and p.received_date <= :asOf), 0) as paid_minor
+                                     where pa.invoice_id = i.id and p.received_date <= :asOf), 0) as paid_minor,
+                           coalesce((select sum(ca.amount_minor) from ar_ap.credit_application ca
+                                     join ar_ap.credit_note cn on cn.id = ca.credit_note_id
+                                     where ca.invoice_id = i.id and cn.status = 'issued'
+                                       and cn.issue_date <= :asOf), 0) as credited_minor
                     from ar_ap.invoice i join ar_ap.customer c on c.id = i.customer_id
                     where i.entity_id = :entity and i.status <> 'draft' and i.status <> 'void' and i.issue_date <= :asOf
                     order by c.name, i.due_date""")
@@ -346,7 +354,9 @@ public class BillingService {
             Map<UUID, String> names = new LinkedHashMap<>();
             long[] totals = new long[5];
             for (Map<String, Object> row : rows) {
-                long open = ((Number) row.get("total_minor")).longValue() - ((Number) row.get("paid_minor")).longValue();
+                long open = ((Number) row.get("total_minor")).longValue()
+                        - ((Number) row.get("paid_minor")).longValue()
+                        - ((Number) row.get("credited_minor")).longValue();
                 if (open <= 0) {
                     continue;
                 }
@@ -423,7 +433,8 @@ public class BillingService {
                 .params(total.add(tax).minorUnits(), tax.minorUnits(), invoiceId).update();
     }
 
-    private Account receivableAccount(UUID orgId, UUID entityId) {
+    /** The receivable account, for anything in this module that moves what a customer owes. */
+    Account receivableAccount(UUID orgId, UUID entityId) {
         return accounts.list(orgId, entityId).stream()
                 .filter(a -> a.type() == AccountType.asset && "ar".equals(a.subtype()) && !a.isArchived() && !a.isHeader())
                 .findFirst()
@@ -457,9 +468,11 @@ public class BillingService {
         }
     }
 
-    private void refreshInvoiceStatus(UUID entityId, UUID invoiceId) {
+    /** Re-reads an invoice and says whether it is open, part settled or settled. */
+    void refreshInvoiceStatus(UUID entityId, UUID invoiceId) {
         BillingModels.Invoice invoice = loadInvoice(entityId, invoiceId);
-        String status = invoice.balanceDue().isZero() ? "paid" : invoice.amountPaid().isPositive() ? "partially_paid" : "open";
+        String status = invoice.balanceDue().isZero() ? "paid"
+                : invoice.amountPaid().isPositive() ? "partially_paid" : "open";
         db.sql("update ar_ap.invoice set status = ? where id = ?").params(status, invoiceId).update();
     }
 
@@ -469,13 +482,13 @@ public class BillingService {
         }
     }
 
-    private BillingModels.Customer findCustomer(UUID entityId, UUID customerId) {
+    BillingModels.Customer findCustomer(UUID entityId, UUID customerId) {
         return db.sql(CUSTOMER_SELECT + " where entity_id = ? and id = ?").params(entityId, customerId)
                 .query(BillingModels.Customer.class).optional()
                 .orElseThrow(() -> new NotFoundException("Customer " + customerId + " not found"));
     }
 
-    private BillingModels.Invoice lockInvoice(UUID entityId, UUID invoiceId) {
+    BillingModels.Invoice lockInvoice(UUID entityId, UUID invoiceId) {
         db.sql("select id from ar_ap.invoice where entity_id = ? and id = ? for update")
                 .params(entityId, invoiceId).query(UUID.class).optional()
                 .orElseThrow(() -> new NotFoundException("Invoice " + invoiceId + " not found"));
@@ -486,13 +499,17 @@ public class BillingService {
         Map<String, Object> row = db.sql("""
                 select id, entity_id, customer_id, invoice_number, issue_date, due_date, terms, memo, total_minor,
                        tax_total_minor, currency, status, journal_entry_id,
-                       coalesce((select sum(amount_minor) from ar_ap.payment_application where invoice_id = ar_ap.invoice.id), 0) as paid_minor
+                       coalesce((select sum(amount_minor) from ar_ap.payment_application where invoice_id = ar_ap.invoice.id), 0) as paid_minor,
+                       coalesce((select sum(ca.amount_minor) from ar_ap.credit_application ca
+                                 join ar_ap.credit_note cn on cn.id = ca.credit_note_id
+                                 where ca.invoice_id = ar_ap.invoice.id and cn.status = 'issued'), 0) as credited_minor
                 from ar_ap.invoice where entity_id = ? and id = ?""")
                 .params(entityId, invoiceId).query().listOfRows().stream().findFirst()
                 .orElseThrow(() -> new NotFoundException("Invoice " + invoiceId + " not found"));
         String currency = ((String) row.get("currency")).trim();
         Money total = Money.ofMinor(((Number) row.get("total_minor")).longValue(), currency);
         Money paid = Money.ofMinor(((Number) row.get("paid_minor")).longValue(), currency);
+        Money credited = Money.ofMinor(((Number) row.get("credited_minor")).longValue(), currency);
         List<BillingModels.InvoiceLine> lines = db.sql("""
                 select id, line_no, description, quantity, unit_price_minor, amount_minor, income_account_id,
                        tax_rate_id, tax_amount_minor
@@ -509,8 +526,9 @@ public class BillingService {
         Money taxTotal = Money.ofMinor(((Number) row.get("tax_total_minor")).longValue(), currency);
         return new BillingModels.Invoice((UUID) row.get("id"), (UUID) row.get("entity_id"), (UUID) row.get("customer_id"),
                 (String) row.get("invoice_number"), date(row.get("issue_date")), date(row.get("due_date")),
-                (String) row.get("terms"), (String) row.get("memo"), total, paid, total.subtract(paid),
-                (String) row.get("status"), (UUID) row.get("journal_entry_id"), lines, taxTotal);
+                (String) row.get("terms"), (String) row.get("memo"), total, paid,
+                total.subtract(paid).subtract(credited), (String) row.get("status"),
+                (UUID) row.get("journal_entry_id"), lines, taxTotal, credited);
     }
 
     private BillingModels.Payment loadPayment(UUID entityId, UUID paymentId) {

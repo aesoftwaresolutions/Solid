@@ -14,7 +14,7 @@ Sign in (with mandatory two-factor), create an organization and its entities, an
 |---|---|
 | **Books** | Chart of accounts from a template (Schedule C or household), manual journal entries, recurring entries, opening balances, period locks, immutable posting with a hash-chained audit trail |
 | **Bank** | Import CSV/OFX/QFX, review queue with rules and bulk categorizing, reconcile against a statement, attach the receipt to the transaction |
-| **Sales & purchases** | Customers, quotes that become invoices when accepted, invoices (draft → issued → paid), invoices that repeat for retainers, invoice and quote PDFs on your own letterhead, statements, vendors, bills, payments, A/R and A/P aging, 1099-NEC candidate tracking |
+| **Sales & purchases** | Customers, quotes that become invoices when accepted, invoices (draft → issued → paid), credit notes, invoices that repeat for retainers, invoice and quote PDFs on your own letterhead, statements, vendors, bills, payments, A/R and A/P aging, 1099-NEC candidate tracking |
 | **Assets & deductions** | Fixed assets with straight-line book depreciation and disposal, mileage log, home-office declaration |
 | **Personal** | Household chart of accounts, monthly budgets, budget vs actual |
 | **Documents** | An encrypted vault for receipts and paperwork, linked to the records they support |
