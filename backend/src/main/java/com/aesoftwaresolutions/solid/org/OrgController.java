@@ -70,14 +70,40 @@ class OrgController {
         return orgs.getEntity(orgId, entityId);
     }
 
+    /**
+     * Owners and admins only. The accounting method decides what every past report means, so this is not a
+     * setting for whoever happens to be entering invoices today (spec 050).
+     */
     @org.springframework.web.bind.annotation.PatchMapping("/{orgId}/entities/{entityId}")
     LegalEntity updateEntity(@PathVariable UUID orgId, @PathVariable UUID entityId,
                              @Valid @RequestBody OrgRequests.UpdateEntity body) {
+        // The caller's role comes through the iam module's public membership API rather than a servlet
+        // attribute, so this module depends on nothing internal to it.
+        com.aesoftwaresolutions.solid.iam.Role role = com.aesoftwaresolutions.solid.platform.RequestContext
+                .current()
+                .flatMap(caller -> memberships.roleFor(orgId, caller.userId()))
+                .orElse(null);
+        if (role == null || !role.canManageMembers()) {
+            throw new com.aesoftwaresolutions.solid.common.ForbiddenException(
+                    "Only owners and admins can change an entity's settings");
+        }
+        LegalEntity before = orgs.getEntity(orgId, entityId);
         LegalEntity updated = orgs.updateEntity(orgId, entityId, body.legalName(), body.accountingMethod(),
                 body.homeState());
-        audit.record(AuditLog.Actor.current(), orgId, "entity_updated", "entity", entityId,
-                java.util.Map.of("homeState", String.valueOf(updated.homeState()),
-                        "accountingMethod", updated.accountingMethod()));
+        // What changed, from what to what: "it says accrual now" is no use without "and it said cash before".
+        java.util.Map<String, Object> changes = new java.util.LinkedHashMap<>();
+        if (!before.legalName().equals(updated.legalName())) {
+            changes.put("legalName", before.legalName() + " -> " + updated.legalName());
+        }
+        if (!before.accountingMethod().equals(updated.accountingMethod())) {
+            changes.put("accountingMethod", before.accountingMethod() + " -> " + updated.accountingMethod());
+        }
+        if (!java.util.Objects.equals(before.homeState(), updated.homeState())) {
+            changes.put("homeState", before.homeState() + " -> " + updated.homeState());
+        }
+        if (!changes.isEmpty()) {
+            audit.record(AuditLog.Actor.current(), orgId, "entity_updated", "entity", entityId, changes);
+        }
         return updated;
     }
 

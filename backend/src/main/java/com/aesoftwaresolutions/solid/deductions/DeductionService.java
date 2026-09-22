@@ -182,9 +182,22 @@ public class DeductionService {
     public Optional<DeductionModels.HomeOfficeReport> homeOfficeReport(UUID orgId, UUID entityId, int taxYear) {
         LegalEntity entity = orgs.getEntity(orgId, entityId);
         String ccy = entity.baseCurrency();
-        DeductionRates.HomeOfficeSimplified simplified = rates.homeOfficeSimplified(taxYear);
+        Optional<DeductionRates.HomeOfficeSimplified> published = rates.homeOfficeSimplified(taxYear);
 
         return orgScope.call(orgId, () -> findHomeOffice(entityId, taxYear).map(declaration -> {
+            if (published.isEmpty()) {
+                // No rate on file for that year. The declaration is still reported; the deduction is not
+                // invented (see CLAUDE.md).
+                return new DeductionModels.HomeOfficeReport(taxYear, declaration.method(),
+                        declaration.officeSquareFeet(), 0, 0, null,
+                        BigDecimal.valueOf(declaration.officeSquareFeet()).multiply(BigDecimal.valueOf(100))
+                                .divide(BigDecimal.valueOf(declaration.totalHomeSquareFeet()), 2, RoundingMode.HALF_UP),
+                        declaration.monthsUsed(), null, null,
+                        "No published simplified-method rate for " + taxYear + " is on file, so Solid will not "
+                                + "work out a deduction. An administrator can add the rate on the installation "
+                                + "page once it is published.");
+            }
+            DeductionRates.HomeOfficeSimplified simplified = published.get();
             int counted = Math.min(declaration.officeSquareFeet(), simplified.maximumSquareFeet());
             BigDecimal full = simplified.ratePerSquareFoot().multiply(BigDecimal.valueOf(counted));
             BigDecimal prorated = declaration.monthsUsed() == null ? full

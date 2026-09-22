@@ -58,12 +58,15 @@ public class PasswordService {
         if (passwords.matches(newPassword == null ? "" : newPassword, hash)) {
             throw new ApiProblemException(400, "PASSWORD_UNCHANGED", "The new password is the old one");
         }
-        iam.validatePasswordRules(newPassword);
-        db.sql("update iam.user_account set password_hash = ? where id = ?")
-                .params(passwords.encode(newPassword), principal.userId()).update();
-        // Everywhere else is signed out: a changed password should end whatever prompted the change.
-        db.sql("update iam.session set revoked_at = now() where user_id = ? and id <> ? and revoked_at is null")
-                .params(principal.userId(), principal.sessionId()).update();
+        IamService.validatePasswordRules(newPassword);
+        // One transaction: a new password with the old sessions still live is exactly the state someone
+        // changing their password because of a break-in must never end up in.
+        tx.executeWithoutResult(status -> {
+            db.sql("update iam.user_account set password_hash = ? where id = ?")
+                    .params(passwords.encode(newPassword), principal.userId()).update();
+            db.sql("update iam.session set revoked_at = now() where user_id = ? and id <> ? and revoked_at is null")
+                    .params(principal.userId(), principal.sessionId()).update();
+        });
         audit.record(new AuditLog.Actor(principal.userId(), ip), null, "password_changed", "user",
                 principal.userId(), Map.of());
     }
@@ -106,11 +109,11 @@ public class PasswordService {
             if (row.get("used_at") != null) {
                 throw new ApiProblemException(409, "RESET_USED", "That reset link has already been used");
             }
-            if (((java.sql.Timestamp) row.get("expires_at")).toInstant().isBefore(Instant.now())) {
+            if (Timestamps.toInstant(row.get("expires_at")).isBefore(Instant.now())) {
                 throw new ApiProblemException(409, "RESET_EXPIRED", "That reset link has expired");
             }
             UUID userId = (UUID) row.get("user_id");
-            iam.validatePasswordRules(newPassword);
+            IamService.validatePasswordRules(newPassword);
             db.sql("update iam.user_account set password_hash = ?, failed_login_count = 0, locked_until = null "
                     + "where id = ?")
                     .params(passwords.encode(newPassword), userId).update();

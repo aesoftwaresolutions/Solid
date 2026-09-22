@@ -121,8 +121,12 @@ A failure prints the call that broke and what came back. The usual causes are th
 if the checks themselves disagree (a figure comes back wrong), stop and report it rather than upgrading
 further, because that is a correctness problem, not a deployment one.
 
-The test leaves its throwaway organization behind on purpose, so you can look at it. Remove it when you want
-to; nothing else refers to it.
+What it leaves behind: an organization and entity named "Solid smoke test <date>". The entry it posts is
+reversed before it finishes — a posted entry is immutable, so reversing is the only honest way to undo one —
+but the organization stays, because Solid has no way to delete one. On a production instance that is one
+extra line in the organization list per run. To check a live instance without writing anything, run it with
+`SOLID_SMOKE_READ_ONLY=1`; that skips the posting path, which is the part most worth testing after an
+upgrade, so prefer the full run on a staging copy.
 
 ## When the app will not start
 

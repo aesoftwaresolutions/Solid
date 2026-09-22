@@ -2,10 +2,17 @@
 """Proves a running Solid stack actually works, from the outside.
 
 Run it against the URL the web container serves (default http://localhost:8080) after
-`docker compose up --build`. It signs up a throwaway user, turns on MFA, creates an
-organization and entity, applies a chart of accounts, posts one balanced entry, and checks
-that the reports agree with it. Nothing here touches the database directly: if this passes,
-the packaged jar, the migrations, the reverse proxy and the API all work together.
+`docker compose up --build`. It creates an organization and entity, applies a chart of
+accounts, posts one balanced entry, and checks that the reports agree with it. Nothing here
+touches the database directly: if this passes, the packaged jar, the migrations, the reverse
+proxy and the API all work together.
+
+WHAT IT LEAVES BEHIND: a posted entry cannot be deleted in Solid, only reversed, and there is
+no API to delete an organization. So the script reverses its own entry and names everything it
+makes "Solid smoke test <timestamp>" — but that organization and entity stay on the instance.
+Against a real instance that is a small, permanent addition to the list of organizations; it is
+also the honest cost of testing the real write path. Set SOLID_SMOKE_READ_ONLY=1 to check only
+the things that write nothing (version, sign-in, and that the reports answer).
 
 On a brand-new instance it signs itself up. Once the first account exists, sign-up closes (as it should),
 so give it an existing user instead:
@@ -109,8 +116,16 @@ else:
     call("POST", "/auth/mfa/activate", {"code": totp(secret)})
     print("  ok  signed up, logged in, MFA on")
 
-org = call("POST", "/orgs", {"name": "Smoke Test Org", "kind": "business"})["id"]
-entity = call("POST", f"/orgs/{org}/entities", {"kind": "sole_prop", "legalName": "Smoke Test LLC"})["id"]
+if os.environ.get("SOLID_SMOKE_READ_ONLY") == "1":
+    call("GET", "/orgs")
+    print("  ok  the API answers for this user")
+    print("PASS (read-only) — nothing was written, so the posting path was not exercised.")
+    raise SystemExit(0)
+
+stamp = time.strftime("%Y-%m-%d %H:%M")
+org = call("POST", "/orgs", {"name": f"Solid smoke test {stamp}", "kind": "business"})["id"]
+entity = call("POST", f"/orgs/{org}/entities",
+              {"kind": "sole_prop", "legalName": f"Solid smoke test {stamp}"})["id"]
 base = f"/orgs/{org}/entities/{entity}"
 accounts = {a["code"]: a["id"] for a in call("POST", base + "/accounts/apply-template", {"template": "schedule_c"})}
 print(f"  ok  organization, entity and {len(accounts)} accounts")
@@ -121,6 +136,8 @@ call("POST", base + "/journal-entries", {
     "lines": [{"accountId": accounts["1010"], "amount": money("1500.00")},
               {"accountId": accounts["4010"], "amount": money("-1500.00")}],
 })
+
+entry_id = call("GET", base + "/journal-entries")[0]["id"]
 
 pnl = call("GET", base + "/reports/profit-and-loss?from=2026-01-01&to=2026-12-31")
 check("net income", pnl["netIncome"]["amount"], "1500.00")
@@ -134,4 +151,13 @@ setup = call("GET", base + "/setup")
 check("setup reports the first entry done",
       next(s["status"] for s in setup["steps"] if s["key"] == "first_entry"), "done")
 
-print("PASS — the packaged stack works end to end.")
+# A posted entry is immutable, so the way to undo it is a reversing entry — which is itself
+# another check that posting works.
+call("POST", f"{base}/journal-entries/{entry_id}/reverse", {"memo": "Reversing the smoke test entry"},
+     expect=(200, 201))
+after = call("GET", base + "/reports/profit-and-loss?from=2026-01-01&to=2026-12-31")
+check("net income after reversing", after["netIncome"]["amount"], "0.00")
+
+print()
+print(f"PASS — the packaged stack works end to end.")
+print(f"It left behind the organization 'Solid smoke test {stamp}' (entry posted and reversed).")

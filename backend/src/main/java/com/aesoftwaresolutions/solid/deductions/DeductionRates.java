@@ -26,6 +26,7 @@ public class DeductionRates {
     private final Map<Integer, BigDecimal> mileageRates = new LinkedHashMap<>();
     private final String mileageSource;
     private final HomeOfficeSimplified homeOffice;
+    private final int homeOfficeFromTaxYear;
     private final TaxFigures figures;
 
     DeductionRates(ObjectMapper mapper, TaxFigures figures) {
@@ -38,6 +39,9 @@ public class DeductionRates {
         JsonNode home = read(mapper, "tax-rules/home-office-simplified.json");
         this.homeOffice = new HomeOfficeSimplified(new BigDecimal(home.get("ratePerSquareFoot").asText()),
                 home.get("maximumSquareFeet").asInt(), home.get("source").asText());
+        // The simplified method did not exist before this year, so the file says from when it applies and
+        // the code honours it: a 2011 claim must report "no rate on file", not $5.00 a square foot.
+        this.homeOfficeFromTaxYear = home.get("appliesFromTaxYear").asInt();
     }
 
     /**
@@ -56,11 +60,15 @@ public class DeductionRates {
                 .orElse(mileageSource);
     }
 
-    public HomeOfficeSimplified homeOfficeSimplified(int taxYear) {
+    /**
+     * Empty when neither this installation nor the shipped file has a rate for that year — the caller then
+     * says so instead of quietly using the most recent rate it happens to know.
+     */
+    public Optional<HomeOfficeSimplified> homeOfficeSimplified(int taxYear) {
         return figures.inForce(TaxFigures.Key.home_office_rate_per_square_foot, taxYear)
                 .map(figure -> new HomeOfficeSimplified(figure.value(), homeOffice.maximumSquareFeet(),
                         "Added on this installation: " + figure.source()))
-                .orElse(homeOffice);
+                .or(() -> taxYear >= homeOfficeFromTaxYear ? Optional.of(homeOffice) : Optional.empty());
     }
 
     private static JsonNode read(ObjectMapper mapper, String path) {

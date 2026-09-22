@@ -109,12 +109,20 @@ public class TaxFigures {
                         Map.of("key", key.name(), "taxYear", taxYear, "was", existing.get().value().toPlainString()));
             }
             UUID id = Ids.newId();
-            db.sql("""
-                    insert into tax.figure (id, figure_key, tax_year, value_decimal, source, note, added_by)
-                    values (?, ?, ?, ?, ?, ?, ?)""")
-                    .params(id, key.name(), taxYear, amount, source.trim(),
-                            note == null || note.isBlank() ? null : note.trim(), actorId)
-                    .update();
+            try {
+                db.sql("""
+                        insert into tax.figure (id, figure_key, tax_year, value_decimal, source, note, added_by)
+                        values (?, ?, ?, ?, ?, ?, ?)""")
+                        .params(id, key.name(), taxYear, amount, source.trim(),
+                                note == null || note.isBlank() ? null : note.trim(), actorId)
+                        .update();
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                // Two administrators adding the same key and year at once: the index kept one of them, and
+                // the loser gets the ordinary answer rather than a server error.
+                throw new ApiProblemException(409, "FIGURE_EXISTS",
+                        "Someone has just added a figure for " + key + " in " + taxYear + ". Reload and look "
+                                + "at it before replacing it.");
+            }
             audit.record(new AuditLog.Actor(actorId, ip), null, "tax_figure_added", "tax_figure", id,
                     Map.of("key", key.name(), "taxYear", taxYear, "value", amount.toPlainString(),
                             "source", source.trim()));

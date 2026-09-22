@@ -80,10 +80,18 @@ public class InvitationService {
             String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
             UUID id = Ids.newId();
             OffsetDateTime expires = OffsetDateTime.now().plus(VALID_FOR);
-            db.sql("""
-                    insert into iam.invitation (id, org_id, email, role, token_hash, invited_by, expires_at)
-                    values (?, ?, ?, ?, ?, ?, ?)""")
-                    .params(id, orgId, normalized, role.name(), hash(token), invitedBy, expires).update();
+            try {
+                db.sql("""
+                        insert into iam.invitation (id, org_id, email, role, token_hash, invited_by, expires_at)
+                        values (?, ?, ?, ?, ?, ?, ?)""")
+                        .params(id, orgId, normalized, role.name(), hash(token), invitedBy, expires).update();
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                // Someone invited the same address at the same moment; the index kept the data right, and
+                // the caller deserves the ordinary answer rather than a server error.
+                throw new ApiProblemException(409, "ALREADY_INVITED",
+                        "Someone has just invited that address. Ask them for the link, or withdraw it and "
+                                + "invite again.");
+            }
             audit.record(new AuditLog.Actor(invitedBy, ip), orgId, "invitation_created", "invitation", id,
                     Map.of("email", normalized, "role", role.name()));
             return new Invitation(id, orgId, normalized, role, InviteStatus.pending, invitedBy,
@@ -135,9 +143,7 @@ public class InvitationService {
                 throw new ApiProblemException(409, "INVITATION_USED",
                         "That invitation has already been used or was withdrawn");
             }
-            // A generic row map gives whatever the driver returned (a java.sql.Timestamp here), so convert
-            // rather than cast.
-            Instant expires = ((java.sql.Timestamp) row.get("expires_at")).toInstant();
+            Instant expires = Timestamps.toInstant(row.get("expires_at"));
             if (expires.isBefore(Instant.now())) {
                 throw new ApiProblemException(409, "INVITATION_EXPIRED",
                         "That invitation has expired. Ask for a new one.");
@@ -152,7 +158,7 @@ public class InvitationService {
                     // Only an invited address can get in this way, and only with its own new password: an
                     // existing account's password is never touched by a link someone was sent.
                     iam.createInvitedUser(email, password, displayName, ip));
-            memberships.addMember(orgId, email, role);
+            memberships.addMember(orgId, email, role, new AuditLog.Actor(user.id(), ip));
             db.sql("update iam.invitation set accepted_at = now(), accepted_by = ? where id = ?")
                     .params(user.id(), invitationId).update();
             audit.record(new AuditLog.Actor(user.id(), ip), orgId, "invitation_accepted", "invitation",

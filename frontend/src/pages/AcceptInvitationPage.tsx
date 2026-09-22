@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { Card, ErrorMessage } from '../components';
@@ -15,6 +15,14 @@ export default function AcceptInvitationPage() {
   const [done, setDone] = useState<{ created: boolean; email: string } | null>(null);
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
+
+  // The token is a credential. Take it out of the address bar as soon as it has been read, so it does not
+  // sit in browser history or leak through a Referer header.
+  useEffect(() => {
+    if (token) {
+      window.history.replaceState({}, '', '/accept-invitation');
+    }
+  }, [token]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

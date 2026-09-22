@@ -20,11 +20,14 @@ public class MembershipService {
     private final JdbcClient db;
     private final AuditLog audit;
     private final IamService iam;
+    private final org.springframework.transaction.support.TransactionTemplate tx;
 
-    MembershipService(JdbcClient db, AuditLog audit, IamService iam) {
+    MembershipService(JdbcClient db, AuditLog audit, IamService iam,
+                      org.springframework.transaction.support.TransactionTemplate tx) {
         this.db = db;
         this.audit = audit;
         this.iam = iam;
+        this.tx = tx;
     }
 
     public void addOwner(UUID orgId, UUID userId) {
@@ -57,16 +60,19 @@ public class MembershipService {
      * nobody can administer is worse than one with too many administrators.
      */
     public Member changeRole(UUID orgId, UUID userId, Role role, UUID actorId, String ip) {
-        Role current = roleFor(orgId, userId)
-                .orElseThrow(() -> new NotFoundException("That person is not a member of this organization"));
-        if (current == Role.owner && role != Role.owner) {
-            requireAnotherOwner(orgId, userId, "demote");
-        }
-        db.sql("update iam.membership set role = ? where org_id = ? and user_id = ?")
-                .params(role.name(), orgId, userId).update();
-        audit.record(new AuditLog.Actor(actorId, ip), orgId, "member_role_changed", "user", userId,
-                Map.of("from", current.name(), "to", role.name()));
-        return members(orgId).stream().filter(m -> m.userId().equals(userId)).findFirst().orElseThrow();
+        return tx.execute(status -> {
+            lockMemberships(orgId);
+            Role current = roleFor(orgId, userId)
+                    .orElseThrow(() -> new NotFoundException("That person is not a member of this organization"));
+            if (current == Role.owner && role != Role.owner) {
+                requireAnotherOwner(orgId, userId, "demote");
+            }
+            db.sql("update iam.membership set role = ? where org_id = ? and user_id = ?")
+                    .params(role.name(), orgId, userId).update();
+            audit.record(new AuditLog.Actor(actorId, ip), orgId, "member_role_changed", "user", userId,
+                    Map.of("from", current.name(), "to", role.name()));
+            return members(orgId).stream().filter(m -> m.userId().equals(userId)).findFirst().orElseThrow();
+        });
     }
 
     /**
@@ -74,14 +80,27 @@ public class MembershipService {
      * who currently has a login.
      */
     public void removeMember(UUID orgId, UUID userId, UUID actorId, String ip) {
-        Role current = roleFor(orgId, userId)
-                .orElseThrow(() -> new NotFoundException("That person is not a member of this organization"));
-        if (current == Role.owner) {
-            requireAnotherOwner(orgId, userId, "remove");
-        }
-        db.sql("delete from iam.membership where org_id = ? and user_id = ?").params(orgId, userId).update();
-        audit.record(new AuditLog.Actor(actorId, ip), orgId, "member_removed", "user", userId,
-                Map.of("role", current.name()));
+        tx.executeWithoutResult(status -> {
+            lockMemberships(orgId);
+            Role current = roleFor(orgId, userId)
+                    .orElseThrow(() -> new NotFoundException("That person is not a member of this organization"));
+            if (current == Role.owner) {
+                requireAnotherOwner(orgId, userId, "remove");
+            }
+            db.sql("delete from iam.membership where org_id = ? and user_id = ?").params(orgId, userId).update();
+            audit.record(new AuditLog.Actor(actorId, ip), orgId, "member_removed", "user", userId,
+                    Map.of("role", current.name()));
+        });
+    }
+
+    /**
+     * Serialises changes to one organization's members for the rest of the transaction. Without it, two
+     * owners removing each other at the same moment both count "one other owner" and both succeed, leaving
+     * books nobody can administer — a state no API call can undo (spec 050).
+     */
+    private void lockMemberships(UUID orgId) {
+        db.sql("select pg_advisory_xact_lock(hashtext('membership:' || ?))").param(orgId.toString())
+                .query(Object.class).single();
     }
 
     private void requireAnotherOwner(UUID orgId, UUID userId, String verb) {
@@ -96,6 +115,14 @@ public class MembershipService {
     }
 
     public Member addMember(UUID orgId, String email, Role role) {
+        return addMember(orgId, email, role, AuditLog.Actor.current());
+    }
+
+    /**
+     * @param actor who is granting this access. Accepting an invitation happens with nobody signed in, so
+     *              the caller passes the accepting user rather than letting the audit trail say "system".
+     */
+    public Member addMember(UUID orgId, String email, Role role, AuditLog.Actor actor) {
         IamService.User user = iam.findUserByEmail(email)
                 .orElseThrow(() -> new NotFoundException("No user with that email. They need an account first."));
         int inserted = db.sql("insert into iam.membership (org_id, user_id, role) values (?, ?, ?) on conflict do nothing")
@@ -103,7 +130,7 @@ public class MembershipService {
         if (inserted == 0) {
             throw new ApiProblemException(409, "ALREADY_MEMBER", "That user is already a member");
         }
-        audit.record(AuditLog.Actor.current(), orgId, "member_added", "user", user.id(), Map.of("role", role.name()));
+        audit.record(actor, orgId, "member_added", "user", user.id(), Map.of("role", role.name()));
         return new Member(user.id(), user.email(), user.displayName(), role);
     }
 }
