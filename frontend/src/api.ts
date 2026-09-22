@@ -582,6 +582,33 @@ export interface Invitation {
   token: string | null;
 }
 
+export interface QuoteLine {
+  id: string;
+  lineNo: number;
+  description: string;
+  quantity: string;
+  unitPrice: Money;
+  amount: Money;
+  incomeAccountId: string;
+}
+
+export interface Quote {
+  id: string;
+  customerId: string;
+  customerName: string;
+  quoteNumber: string;
+  issueDate: string;
+  validUntil: string | null;
+  memo: string | null;
+  total: Money;
+  /** draft, sent, accepted, declined, converted — or "expired", which the date decides. */
+  status: string;
+  invoiceId: string | null;
+  declinedReason: string | null;
+  expired: boolean;
+  lines: QuoteLine[];
+}
+
 export interface WhatsComingItem {
   date: string;
   kind: 'invoice_due' | 'bill_due' | 'recurring_invoice' | 'recurring_entry';
@@ -1285,6 +1312,30 @@ export const api = {
       { method: 'POST', ...json({ csv }) },
       [422],
     ),
+
+  quotes: (orgId: string, entityId: string) =>
+    request<Quote[]>(`/orgs/${orgId}/entities/${entityId}/quotes`),
+  createQuote: (
+    orgId: string,
+    entityId: string,
+    body: {
+      customerId: string;
+      issueDate: string;
+      validUntil?: string;
+      memo?: string;
+      lines: { description: string; quantity: string; unitPrice: Money; incomeAccountId: string }[];
+    },
+  ) => request<Quote>(`/orgs/${orgId}/entities/${entityId}/quotes`, { method: 'POST', ...json(body) }),
+  quoteAction: (orgId: string, entityId: string, quoteId: string, what: 'send' | 'accept' | 'decline') =>
+    request<Quote>(`/orgs/${orgId}/entities/${entityId}/quotes/${quoteId}/${what}`, {
+      method: 'POST',
+      ...json({}),
+    }),
+  convertQuote: (orgId: string, entityId: string, quoteId: string) =>
+    request<Invoice>(`/orgs/${orgId}/entities/${entityId}/quotes/${quoteId}/convert`, {
+      method: 'POST',
+      ...json({}),
+    }),
 
   whatsComing: (orgId: string, entityId: string) =>
     request<WhatsComing>(`/orgs/${orgId}/entities/${entityId}/reports/whats-coming`),

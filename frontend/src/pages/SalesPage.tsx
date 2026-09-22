@@ -6,6 +6,7 @@ import {
   type Account,
   type Customer,
   type Invoice,
+  type Money,
   type RecurringInvoiceRun,
   type SalesTaxRate,
 } from '../api';
@@ -28,6 +29,7 @@ export default function SalesPage() {
   );
 
   const recurring = useLoader(() => api.recurringInvoices(orgId, entityId), [orgId, entityId]);
+  const quotes = useLoader(() => api.quotes(orgId, entityId), [orgId, entityId]);
 
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
@@ -174,6 +176,89 @@ export default function SalesPage() {
           />
         </Card>
       )}
+
+      <Card title="Quotes">
+        <ErrorMessage error={quotes.error} />
+        <p className="muted">
+          A price you offered. A quote posts nothing and is owed by nobody; when it is accepted, turning it
+          into an invoice copies the lines across as a draft for you to check.
+        </p>
+        {customers.value && customers.value.length > 0 && incomeAccounts.length > 0 && (
+          <NewQuote
+            orgId={orgId}
+            entityId={entityId}
+            customers={customers.value}
+            incomeAccounts={incomeAccounts}
+            onCreated={quotes.reload}
+          />
+        )}
+        {quotes.value && quotes.value.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Number</th>
+                <th>Customer</th>
+                <th>Good until</th>
+                <th className="money">Total</th>
+                <th>Status</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {quotes.value.map((quote) => (
+                <tr key={quote.id}>
+                  <td>{quote.quoteNumber}</td>
+                  <td>{quote.customerName}</td>
+                  <td className="muted">{quote.validUntil ?? 'no end date'}</td>
+                  <td className="money">{formatMoney(quote.total)}</td>
+                  <td>
+                    {quote.status}
+                    {quote.declinedReason ? ` — ${quote.declinedReason}` : ''}
+                  </td>
+                  <td>
+                    {quote.status === 'draft' && (
+                      <button
+                        type="button"
+                        aria-label={`Mark ${quote.quoteNumber} sent`}
+                        onClick={() => act(api.quoteAction(orgId, entityId, quote.id, 'send').then(quotes.reload))}
+                      >
+                        Sent
+                      </button>
+                    )}{' '}
+                    {(quote.status === 'draft' || quote.status === 'sent') && (
+                      <>
+                        <button
+                          type="button"
+                          aria-label={`Accept ${quote.quoteNumber}`}
+                          onClick={() => act(api.quoteAction(orgId, entityId, quote.id, 'accept').then(quotes.reload))}
+                        >
+                          Accepted
+                        </button>{' '}
+                        <button
+                          type="button"
+                          aria-label={`Decline ${quote.quoteNumber}`}
+                          onClick={() => act(api.quoteAction(orgId, entityId, quote.id, 'decline').then(quotes.reload))}
+                        >
+                          Declined
+                        </button>
+                      </>
+                    )}
+                    {quote.status === 'accepted' && (
+                      <button
+                        type="button"
+                        aria-label={`Make an invoice from ${quote.quoteNumber}`}
+                        onClick={() => act(api.convertQuote(orgId, entityId, quote.id).then(quotes.reload))}
+                      >
+                        Make an invoice
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
 
       <Card title="Invoices that repeat">
         <ErrorMessage error={recurring.error} />
@@ -796,6 +881,96 @@ function NewRecurringInvoice({
       </label>
       <button type="submit" disabled={busy}>
         Save the template
+      </button>
+    </form>
+  );
+}
+
+/** A quote is priced like an invoice; one line is enough to send a number, which is what this asks for. */
+function NewQuote({
+  orgId,
+  entityId,
+  customers,
+  incomeAccounts,
+  onCreated,
+}: {
+  orgId: string;
+  entityId: string;
+  customers: Customer[];
+  incomeAccounts: Account[];
+  onCreated: () => void;
+}) {
+  const [customerId, setCustomerId] = useState('');
+  const [validUntil, setValidUntil] = useState('');
+  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState('');
+  const [incomeAccountId, setIncomeAccountId] = useState('');
+  const [error, setError] = useState<unknown>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  const chosenCustomer = customerId || customers[0]?.id || '';
+  const chosenAccount = incomeAccountId || incomeAccounts[0]?.id || '';
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError(undefined);
+        const unitPrice: Money = { amount: amount.trim(), currency: 'USD' };
+        api
+          .createQuote(orgId, entityId, {
+            customerId: chosenCustomer,
+            issueDate: today(),
+            validUntil: validUntil || undefined,
+            lines: [
+              { description: description.trim(), quantity: '1', unitPrice, incomeAccountId: chosenAccount },
+            ],
+          })
+          .then(() => {
+            setDescription('');
+            setAmount('');
+            onCreated();
+          })
+          .catch(setError)
+          .finally(() => setBusy(false));
+      }}
+    >
+      <ErrorMessage error={error} />
+      <label>
+        Customer to quote
+        <select value={chosenCustomer} onChange={(e) => setCustomerId(e.target.value)}>
+          {customers.map((customer) => (
+            <option key={customer.id} value={customer.id}>
+              {customer.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        What the work is
+        <input value={description} required maxLength={300} onChange={(e) => setDescription(e.target.value)} />
+      </label>
+      <label>
+        Price
+        <input value={amount} required inputMode="decimal" onChange={(e) => setAmount(e.target.value)} />
+      </label>
+      <label>
+        Good until (optional)
+        <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+      </label>
+      <label>
+        Income account for the quote
+        <select value={chosenAccount} onChange={(e) => setIncomeAccountId(e.target.value)}>
+          {incomeAccounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.code} {account.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" disabled={busy}>
+        Save the quote
       </button>
     </form>
   );

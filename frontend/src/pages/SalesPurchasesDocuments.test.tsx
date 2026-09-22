@@ -57,6 +57,7 @@ describe('spec 017 AC 1-3: sales', () => {
       [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
       [`GET ${base}/sales-tax-rates`]: [],
       [`GET ${base}/recurring-invoices`]: [],
+      [`GET ${base}/quotes`]: [],
       [`GET ${base}/reports/sales-tax`]: { from: '2026-01-01', to: '2026-09-19', currency: 'USD', jurisdictions: [], totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note' },
       [`POST ${base}/invoices`]: () => {
         invoices = [draft];
@@ -114,6 +115,7 @@ describe('spec 017 AC 1-3: sales', () => {
         [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
         [`GET ${base}/sales-tax-rates`]: [],
       [`GET ${base}/recurring-invoices`]: [],
+      [`GET ${base}/quotes`]: [],
         [`GET ${base}/reports/sales-tax`]: { from: '2026-01-01', to: '2026-09-19', currency: 'USD', jurisdictions: [], totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note' },
         [`POST ${base}/invoices/i1/finalize`]: { detail: 'The period is locked', code: 'PERIOD_LOCKED', status: 409 },
       },
@@ -288,6 +290,7 @@ describe('spec 037: sales tax on the sales page', () => {
       [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
       [`GET ${base}/sales-tax-rates`]: () => rates,
       [`GET ${base}/recurring-invoices`]: [],
+      [`GET ${base}/quotes`]: [],
       [`GET ${base}/reports/sales-tax`]: {
         from: '2026-01-01', to: '2026-09-19', currency: 'USD',
         jurisdictions: [{ jurisdiction: 'Springfield, IL', ratePercent: '8.2500', taxableSales: money('1000.00'), taxCollected: money('82.50') }],
@@ -399,6 +402,7 @@ describe('spec 052: invoices that repeat', () => {
         totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note',
       },
       [`GET ${base}/recurring-invoices`]: [template],
+      [`GET ${base}/quotes`]: [],
       ...routes,
     });
     render(
@@ -448,5 +452,68 @@ describe('spec 052: invoices that repeat', () => {
     fireEvent.click(await screen.findByLabelText('Stop Monthly retainer'));
 
     expect(calls.some((c) => c.key === `POST ${base}/recurring-invoices/r1/deactivate`)).toBe(true);
+  });
+});
+
+describe('spec 054: quotes', () => {
+  const customer = { id: 'c1', name: 'Prospect Ltd', email: null, phone: null, isArchived: false };
+  const quote = {
+    id: 'q1', customerId: 'c1', customerName: 'Prospect Ltd', quoteNumber: 'Q-0001',
+    issueDate: '2026-09-22', validUntil: '2026-10-22', memo: null, total: money('4000.00'),
+    status: 'accepted', invoiceId: null, declinedReason: null, expired: false,
+    lines: [{ id: 'ql1', lineNo: 1, description: 'Design and build', quantity: '1', unitPrice: money('4000.00'), amount: money('4000.00'), incomeAccountId: 'a-4000' }],
+  };
+
+  function renderSales(routes: Record<string, unknown> = {}) {
+    const mocked = mockApi({
+      [`GET ${base}/accounts`]: accounts,
+      [`GET ${base}/customers`]: [customer],
+      [`GET ${base}/invoices`]: [],
+      [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
+      [`GET ${base}/sales-tax-rates`]: [],
+      [`GET ${base}/reports/sales-tax`]: {
+        from: '2026-01-01', to: '2026-09-22', currency: 'USD', jurisdictions: [],
+        totalTaxable: money('0.00'), totalCollected: money('0.00'), note: 'note',
+      },
+      [`GET ${base}/recurring-invoices`]: [],
+      [`GET ${base}/quotes`]: [quote],
+      ...routes,
+    });
+    render(
+      <MemoryRouter initialEntries={['/orgs/o1/entities/e1/sales']}>
+        <Routes>
+          <Route path="/orgs/:orgId/entities/:entityId/sales" element={<SalesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    return mocked;
+  }
+
+  test('lists a quote and turns an accepted one into an invoice', async () => {
+    const { calls } = renderSales({
+      [`POST ${base}/quotes/q1/convert`]: { id: 'i5', status: 'draft', total: money('4000.00') },
+    });
+
+    expect(await screen.findByText('Q-0001')).toBeInTheDocument();
+    expect(screen.getByText(/posts nothing and is owed by nobody/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Make an invoice from Q-0001'));
+
+    await waitFor(() => expect(calls.some((c) => c.key === `POST ${base}/quotes/q1/convert`)).toBe(true));
+  });
+
+  test('creates a quote from the form', async () => {
+    const { calls } = renderSales({ [`POST ${base}/quotes`]: { ...quote, id: 'q2', status: 'draft' } });
+
+    fireEvent.change(await screen.findByLabelText('What the work is'), { target: { value: 'New website' } });
+    fireEvent.change(screen.getByLabelText('Price'), { target: { value: '4000.00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save the quote' }));
+
+    await waitFor(() =>
+      expect(calls.find((c) => c.key === `POST ${base}/quotes`)?.body).toMatchObject({
+        customerId: 'c1',
+        lines: [{ description: 'New website', quantity: '1' }],
+      }),
+    );
   });
 });
