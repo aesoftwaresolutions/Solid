@@ -1,6 +1,7 @@
 package com.aesoftwaresolutions.solid.billing;
 
 import com.aesoftwaresolutions.solid.money.Money;
+import com.aesoftwaresolutions.solid.tax.TaxFigures;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -23,8 +24,10 @@ public class Form1099Thresholds {
 
     private final Map<Integer, String> amountsByYear = new LinkedHashMap<>();
     private final String source;
+    private final TaxFigures figures;
 
-    Form1099Thresholds(ObjectMapper mapper) {
+    Form1099Thresholds(ObjectMapper mapper, TaxFigures figures) {
+        this.figures = figures;
         try (InputStream in = new ClassPathResource("tax-rules/form-1099-nec-thresholds.json").getInputStream()) {
             JsonNode root = mapper.readTree(in);
             this.source = root.get("source").asText();
@@ -36,11 +39,16 @@ public class Form1099Thresholds {
         }
     }
 
+    /** A threshold supplied on this installation wins over the file in the jar (spec 049). */
     public Optional<Money> forYear(int taxYear, String currency) {
-        return Optional.ofNullable(amountsByYear.get(taxYear)).map(amount -> Money.of(amount, currency));
+        return figures.inForce(TaxFigures.Key.form_1099_nec_threshold, taxYear)
+                .map(figure -> Money.of(figure.value().toPlainString(), currency))
+                .or(() -> Optional.ofNullable(amountsByYear.get(taxYear)).map(amount -> Money.of(amount, currency)));
     }
 
-    public String source() {
-        return source;
+    public String source(int taxYear) {
+        return figures.inForce(TaxFigures.Key.form_1099_nec_threshold, taxYear)
+                .map(figure -> "Added on this installation: " + figure.source())
+                .orElse(source);
     }
 }

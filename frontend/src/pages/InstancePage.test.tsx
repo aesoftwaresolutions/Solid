@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mockApi } from '../testSupport';
+import { mockApi, renderApp } from '../testSupport';
 import InstancePage from './InstancePage';
 
 afterEach(() => {
@@ -79,5 +79,47 @@ describe('spec 027: instance admin area', () => {
     expect(await screen.findByText(/Only an instance administrator can see the backup status/)).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(await screen.findByText('Standard mileage rate')).toBeInTheDocument();
+  });
+});
+
+describe('spec 049: tax figures added on this installation', () => {
+  test('adds a figure with its source and lists what is in use', async () => {
+    const { calls } = mockApi({
+      'GET /api/v1/system/info': { name: 'Solid', version: '0.1.0', databaseSchemaVersion: '202609210003' },
+      'GET /api/v1/instance/backup-status': { detail: 'nope' },
+      'GET /api/v1/tax-rules': [],
+      'GET /api/v1/instance/users': [],
+      'GET /api/v1/instance/tax-figures': [
+        {
+          id: 'f1', key: 'mileage_rate_per_mile', taxYear: 2026, value: '0.72',
+          unit: 'US dollars per mile', source: 'IRS Notice 2026-03, standard mileage rates for 2026.',
+          note: null, addedAt: '2026-01-05T09:00:00Z', addedBy: 'u1', supersededAt: null, inUse: true,
+        },
+      ],
+      'GET /api/v1/instance/tax-figures/keys': [
+        { key: 'mileage_rate_per_mile', unit: 'US dollars per mile', decimalPlaces: 3 },
+      ],
+      'POST /api/v1/instance/tax-figures': { id: 'f2' },
+    }, { status: { 'GET /api/v1/instance/backup-status': 403 } });
+
+    renderApp(<InstancePage />, '/instance');
+
+    expect(await screen.findByText('Tax figures added here')).toBeInTheDocument();
+    expect(screen.getByText(/does not check that a figure is right/)).toBeInTheDocument();
+    expect(screen.getByText('mileage_rate_per_mile')).toBeInTheDocument();
+    expect(screen.getByText('in use')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^Tax year/), { target: { value: '2027' } });
+    fireEvent.change(screen.getByLabelText(/^Value/), { target: { value: '0.75' } });
+    fireEvent.change(screen.getByLabelText(/Where it comes from/), {
+      target: { value: 'IRS Notice 2027-04, standard mileage rates for 2027, read on irs.gov.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add figure' }));
+
+    expect(calls.find((c) => c.key === 'POST /api/v1/instance/tax-figures')?.body).toMatchObject({
+      key: 'mileage_rate_per_mile',
+      taxYear: 2027,
+      value: '0.75',
+    });
   });
 });

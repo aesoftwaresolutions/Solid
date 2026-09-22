@@ -21,6 +21,8 @@ export default function InstancePage() {
   const users = useLoader(() => api.instanceUsers(), []);
   const [resetLink, setResetLink] = useState<{ email: string; link: string } | null>(null);
   const [resetError, setResetError] = useState<unknown>(undefined);
+  const figures = useLoader(() => api.taxFigures(), []);
+  const figureKeys = useLoader(() => api.taxFigureKeys(), []);
 
   const forbidden = backup.error instanceof ApiError && backup.error.status === 403;
 
@@ -92,6 +94,46 @@ export default function InstancePage() {
           </>
         )}
       </Card>
+
+      {figures.value && figureKeys.value && (
+        <Card title="Tax figures added here">
+          <p className="muted">
+            Solid ships the figures it knows and refuses to guess the rest. When the IRS publishes a new
+            year's rate, add it here with the notice it came from — no rebuild, and the source is shown
+            wherever the figure is used. Solid does not check that a figure is right; that is on whoever
+            enters it.
+          </p>
+          <AddTaxFigure keys={figureKeys.value} onAdded={figures.reload} />
+          {figures.value.length === 0 ? (
+            <p className="muted">Nothing added yet: the built-in figures are in use.</p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Figure</th>
+                  <th>Year</th>
+                  <th>Value</th>
+                  <th>Status</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {figures.value.map((figure) => (
+                  <tr key={figure.id}>
+                    <td>{figure.key}</td>
+                    <td>{figure.taxYear}</td>
+                    <td>
+                      {figure.value} <span className="muted">{figure.unit}</span>
+                    </td>
+                    <td>{figure.inUse ? 'in use' : 'superseded'}</td>
+                    <td className="muted">{figure.source}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      )}
 
       <Card title="Version">
         <ErrorMessage error={info.error} />
@@ -193,5 +235,81 @@ export default function InstancePage() {
         )}
       </Card>
     </main>
+  );
+}
+
+function AddTaxFigure({
+  keys,
+  onAdded,
+}: {
+  keys: { key: string; unit: string; decimalPlaces: number }[];
+  onAdded: () => void;
+}) {
+  const [key, setKey] = useState(keys[0]?.key ?? '');
+  const [taxYear, setTaxYear] = useState(String(new Date().getFullYear()));
+  const [value, setValue] = useState('');
+  const [source, setSource] = useState('');
+  const [supersede, setSupersede] = useState(false);
+  const [error, setError] = useState<unknown>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  const chosen = keys.find((k) => k.key === key);
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError(undefined);
+        api
+          .addTaxFigure({ key, taxYear: Number(taxYear), value: value.trim(), source: source.trim(), supersede })
+          .then(() => {
+            setValue('');
+            setSource('');
+            setSupersede(false);
+            onAdded();
+          })
+          .catch(setError)
+          .finally(() => setBusy(false));
+      }}
+    >
+      <ErrorMessage error={error} />
+      <label>
+        Figure
+        <select value={key} onChange={(e) => setKey(e.target.value)}>
+          {keys.map((k) => (
+            <option key={k.key} value={k.key}>
+              {k.key} ({k.unit})
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Tax year
+        <input value={taxYear} required inputMode="numeric" onChange={(e) => setTaxYear(e.target.value)} />
+      </label>
+      <label>
+        Value {chosen ? `(${chosen.unit}, ${chosen.decimalPlaces} decimal places)` : ''}
+        <input value={value} required onChange={(e) => setValue(e.target.value)} />
+      </label>
+      <label>
+        Where it comes from
+        <textarea
+          value={source}
+          required
+          minLength={30}
+          rows={2}
+          placeholder="IRS Notice 2026-03, standard mileage rates for 2026, read on irs.gov"
+          onChange={(e) => setSource(e.target.value)}
+        />
+      </label>
+      <label>
+        <input type="checkbox" checked={supersede} onChange={(e) => setSupersede(e.target.checked)} />
+        Replace the figure already on file for that year
+      </label>
+      <button type="submit" disabled={busy}>
+        Add figure
+      </button>
+    </form>
   );
 }

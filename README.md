@@ -24,6 +24,7 @@ Sign in (with mandatory two-factor), create an organization and its entities, an
 | **Getting started** | A setup list computed from the books themselves — what is done, what is next, what is genuinely optional — plus per-entity settings |
 | **Search** | One box across journal entries, accounts, bank transactions, customers, invoices, vendors, bills and documents — by text or by exact amount |
 | **Moving in** | CSV import of a chart of accounts, customer list or vendor list: previewed first, all-or-nothing, safe to re-run |
+| **Tax figures** | Add a newly published rate or threshold at runtime, with the notice it came from — no rebuild, no guessing, and the source shown wherever the figure is used |
 | **Operations** | Backups and a restore drill, a master-key guard that refuses to start against the wrong key, an instance page, a generated OpenAPI document |
 | **Local AI (optional, off)** | Category suggestions from a model running on your own server |
 

@@ -35,7 +35,10 @@ class RowLevelSecurityTests {
             // the only key to a row (spec 048).
             "iam.password_reset",
             "audit.event",           // instance-wide chain; app role has INSERT/SELECT only, filtered by org in queries
-            "sys.instance"           // one row describing the installation itself; holds no customer data (spec 018)
+            "sys.instance",          // one row describing the installation itself; holds no customer data (spec 018)
+            // Published tax figures the operator supplied, with their sources: instance-wide reference data,
+            // not one organization's records, and it holds nothing about a customer (spec 049).
+            "tax.figure"
     );
 
     @Autowired

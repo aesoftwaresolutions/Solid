@@ -137,9 +137,10 @@ public class DeductionService {
                     ? "Estimated deduction = business miles x the IRS standard mileage rate for " + taxYear
                             + ". Keep the log: the IRS expects contemporaneous records."
                     : "No IRS standard mileage rate for " + taxYear + " is on file, so Solid reports miles only and "
-                            + "will not guess a rate. Add it to tax-rules/standard-mileage-rates.json once announced.";
+                            + "will not guess a rate. An administrator can add it on the installation page once the IRS "
+                            + "announces it, or it arrives with a later version of Solid.";
             return new DeductionModels.MileageReport(taxYear, rate.isPresent(), rate.orElse(null), business, commuting,
-                    personal, other, deduction, rates.mileageSource(), note, byVehicle);
+                    personal, other, deduction, rates.mileageSource(taxYear), note, byVehicle);
         });
     }
 
@@ -181,7 +182,7 @@ public class DeductionService {
     public Optional<DeductionModels.HomeOfficeReport> homeOfficeReport(UUID orgId, UUID entityId, int taxYear) {
         LegalEntity entity = orgs.getEntity(orgId, entityId);
         String ccy = entity.baseCurrency();
-        DeductionRates.HomeOfficeSimplified simplified = rates.homeOfficeSimplified();
+        DeductionRates.HomeOfficeSimplified simplified = rates.homeOfficeSimplified(taxYear);
 
         return orgScope.call(orgId, () -> findHomeOffice(entityId, taxYear).map(declaration -> {
             int counted = Math.min(declaration.officeSquareFeet(), simplified.maximumSquareFeet());

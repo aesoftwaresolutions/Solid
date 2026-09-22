@@ -381,9 +381,9 @@ public class PayableService {
             String note = threshold.isPresent()
                     ? "Amounts are payments made during " + taxYear + " (cash basis)."
                     : "No published 1099-NEC threshold for " + taxYear + " is on file, so Solid will not judge which "
-                            + "vendors need a form. Add the amount to tax-rules/form-1099-nec-thresholds.json once the IRS publishes it.";
+                            + "vendors need a form. An administrator can add it on the installation page once the IRS publishes it.";
             return new PayableModels.Form1099Report(taxYear, threshold.isPresent(), threshold.orElse(null),
-                    thresholds.source(), note, List.copyOf(candidates));
+                    thresholds.source(taxYear), note, List.copyOf(candidates));
         });
     }
 

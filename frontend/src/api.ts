@@ -582,6 +582,21 @@ export interface Invitation {
   token: string | null;
 }
 
+export interface TaxFigure {
+  id: string;
+  key: string;
+  taxYear: number;
+  value: string;
+  unit: string;
+  source: string;
+  note: string | null;
+  addedAt: string;
+  addedBy: string | null;
+  supersededAt: string | null;
+  /** True when this is the figure Solid would use today for that key and year. */
+  inUse: boolean;
+}
+
 export interface SetupStep {
   key: string;
   title: string;
@@ -1106,6 +1121,18 @@ export const api = {
     request<void>('/auth/change-password', { method: 'POST', ...json({ currentPassword, newPassword }) }),
   resetPassword: (token: string, newPassword: string) =>
     request<void>('/auth/reset-password', { method: 'POST', ...json({ token, newPassword }) }),
+  taxFigures: () => request<TaxFigure[]>('/instance/tax-figures'),
+  taxFigureKeys: () =>
+    request<{ key: string; unit: string; decimalPlaces: number }[]>('/instance/tax-figures/keys'),
+  addTaxFigure: (figure: {
+    key: string;
+    taxYear: number;
+    value: string;
+    source: string;
+    note?: string;
+    supersede?: boolean;
+  }) => request<TaxFigure>('/instance/tax-figures', { method: 'POST', ...json(figure) }),
+
   instanceUsers: () => request<User[]>('/instance/users'),
   issuePasswordReset: (userId: string) =>
     request<{ userId: string; email: string; expiresAt: string; token: string; resetPath: string }>(
