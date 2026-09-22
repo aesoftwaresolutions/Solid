@@ -1102,6 +1102,11 @@ export const api = {
     request<{ valid: boolean; postedEntries: number; firstInvalidSeq: number | null }>(
       `/orgs/${orgId}/entities/${entityId}/journal/verify`,
     ),
+  changeMemberRole: (orgId: string, userId: string, role: string) =>
+    request<Member>(`/orgs/${orgId}/members/${userId}`, { method: 'PATCH', ...json({ role }) }),
+  removeMember: (orgId: string, userId: string) =>
+    request<void>(`/orgs/${orgId}/members/${userId}`, { method: 'DELETE' }),
+
   invitations: (orgId: string) => request<Invitation[]>(`/orgs/${orgId}/invitations`),
   invite: (orgId: string, email: string, role: string) =>
     request<Invitation>(`/orgs/${orgId}/invitations`, { method: 'POST', ...json({ email, role }) }),

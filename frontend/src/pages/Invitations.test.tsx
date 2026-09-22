@@ -84,3 +84,61 @@ describe('spec 046: inviting the second person', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('no invitation in it');
   });
 });
+
+describe('spec 047: changing and removing people', () => {
+  const owner = { userId: 'u1', email: 'owner@example.test', displayName: 'Owner', role: 'owner' };
+  const helper = { userId: 'u2', email: 'helper@example.test', displayName: 'Helper', role: 'bookkeeper' };
+
+  function renderPeople(routes: Record<string, unknown>, status?: Record<string, number>) {
+    const mocked = mockApi(
+      {
+        'GET /api/v1/orgs/o1/members': [owner, helper],
+        'GET /api/v1/orgs/o1/audit-events': [],
+        'GET /api/v1/orgs/o1/invitations': [],
+        ...routes,
+      },
+      status ? { status } : {},
+    );
+    render(
+      <MemoryRouter initialEntries={['/orgs/o1/settings']}>
+        <Routes>
+          <Route path="/orgs/:orgId/settings" element={<OrganizationPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    return mocked;
+  }
+
+  test('changes a role and removes a member', async () => {
+    const { calls } = renderPeople({
+      'PATCH /api/v1/orgs/o1/members/u2': { ...helper, role: 'accountant' },
+      'DELETE /api/v1/orgs/o1/members/u2': undefined,
+    });
+
+    fireEvent.change(await screen.findByLabelText('Role for helper@example.test'), {
+      target: { value: 'accountant' },
+    });
+    expect(calls.find((c) => c.key === 'PATCH /api/v1/orgs/o1/members/u2')?.body)
+      .toMatchObject({ role: 'accountant' });
+
+    fireEvent.click(screen.getByLabelText('Remove helper@example.test'));
+    expect(calls.some((c) => c.key === 'DELETE /api/v1/orgs/o1/members/u2')).toBe(true);
+  });
+
+  test('shows the server refusal when it would leave nobody in charge', async () => {
+    renderPeople(
+      {
+        'DELETE /api/v1/orgs/o1/members/u1': {
+          detail: 'You cannot remove the last owner: someone has to be able to administer these books.',
+          code: 'LAST_OWNER',
+        },
+      },
+      { 'DELETE /api/v1/orgs/o1/members/u1': 409 },
+    );
+
+    expect(await screen.findByText(/always keeps at least one owner/)).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Remove owner@example.test'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('cannot remove the last owner');
+  });
+});

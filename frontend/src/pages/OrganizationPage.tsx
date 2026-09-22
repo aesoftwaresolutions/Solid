@@ -31,6 +31,7 @@ export default function OrganizationPage() {
   const members = useLoader(() => api.members(orgId), [orgId]);
   const events = useLoader(() => api.auditEvents(orgId, limit), [orgId, limit]);
   const invitations = useLoader(() => api.invitations(orgId), [orgId]);
+  const [peopleError, setPeopleError] = useState<unknown>(undefined);
 
   return (
     <main>
@@ -49,6 +50,7 @@ export default function OrganizationPage() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -56,12 +58,54 @@ export default function OrganizationPage() {
                 <tr key={member.userId}>
                   <td>{member.displayName}</td>
                   <td>{member.email}</td>
-                  <td>{member.role}</td>
+                  <td>
+                    <select
+                      aria-label={`Role for ${member.email}`}
+                      value={member.role}
+                      onChange={(e) =>
+                        api
+                          .changeMemberRole(orgId, member.userId, e.target.value)
+                          .then(() => {
+                            setPeopleError(undefined);
+                            members.reload();
+                          })
+                          .catch(setPeopleError)
+                      }
+                    >
+                      {ROLES.map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.value}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${member.email}`}
+                      onClick={() =>
+                        api
+                          .removeMember(orgId, member.userId)
+                          .then(() => {
+                            setPeopleError(undefined);
+                            members.reload();
+                          })
+                          .catch(setPeopleError)
+                      }
+                    >
+                      Remove
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        <ErrorMessage error={peopleError} />
+        <p className="muted">
+          An organization always keeps at least one owner, so the last one cannot be removed or demoted.
+          Removing someone ends their access here at once; what they already recorded stays in the books.
+        </p>
         {members.value && <AddMember orgId={orgId} onAdded={members.reload} />}
       </Card>
 

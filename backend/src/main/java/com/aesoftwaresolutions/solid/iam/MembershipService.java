@@ -52,6 +52,49 @@ public class MembershipService {
                 .list();
     }
 
+    /**
+     * Changes what someone may do here. An organization must always keep at least one owner: a set of books
+     * nobody can administer is worse than one with too many administrators.
+     */
+    public Member changeRole(UUID orgId, UUID userId, Role role, UUID actorId, String ip) {
+        Role current = roleFor(orgId, userId)
+                .orElseThrow(() -> new NotFoundException("That person is not a member of this organization"));
+        if (current == Role.owner && role != Role.owner) {
+            requireAnotherOwner(orgId, userId, "demote");
+        }
+        db.sql("update iam.membership set role = ? where org_id = ? and user_id = ?")
+                .params(role.name(), orgId, userId).update();
+        audit.record(new AuditLog.Actor(actorId, ip), orgId, "member_role_changed", "user", userId,
+                Map.of("from", current.name(), "to", role.name()));
+        return members(orgId).stream().filter(m -> m.userId().equals(userId)).findFirst().orElseThrow();
+    }
+
+    /**
+     * Ends someone's access to this organization. Their history stays: the books record what happened, not
+     * who currently has a login.
+     */
+    public void removeMember(UUID orgId, UUID userId, UUID actorId, String ip) {
+        Role current = roleFor(orgId, userId)
+                .orElseThrow(() -> new NotFoundException("That person is not a member of this organization"));
+        if (current == Role.owner) {
+            requireAnotherOwner(orgId, userId, "remove");
+        }
+        db.sql("delete from iam.membership where org_id = ? and user_id = ?").params(orgId, userId).update();
+        audit.record(new AuditLog.Actor(actorId, ip), orgId, "member_removed", "user", userId,
+                Map.of("role", current.name()));
+    }
+
+    private void requireAnotherOwner(UUID orgId, UUID userId, String verb) {
+        Integer otherOwners = db.sql(
+                "select count(*) from iam.membership where org_id = ? and role = 'owner' and user_id <> ?")
+                .params(orgId, userId).query(Integer.class).single();
+        if (otherOwners == 0) {
+            throw new ApiProblemException(409, "LAST_OWNER",
+                    "You cannot " + verb + " the last owner: someone has to be able to administer these books. "
+                            + "Make someone else an owner first.");
+        }
+    }
+
     public Member addMember(UUID orgId, String email, Role role) {
         IamService.User user = iam.findUserByEmail(email)
                 .orElseThrow(() -> new NotFoundException("No user with that email. They need an account first."));

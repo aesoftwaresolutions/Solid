@@ -51,6 +51,9 @@ class MemberController {
         return memberships.addMember(orgId, body.email(), body.role());
     }
 
+    record ChangeRole(@NotNull Role role) {
+    }
+
     record InviteRequest(@NotBlank @jakarta.validation.constraints.Email String email, @NotNull Role role) {
     }
 
@@ -78,6 +81,39 @@ class MemberController {
     void revokeInvitation(@PathVariable UUID orgId, @PathVariable UUID invitationId, HttpServletRequest request) {
         requireManager(request);
         invitations.revoke(orgId, invitationId, CurrentUser.require().userId(), ClientIp.of(request));
+    }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/members/{userId}")
+    MembershipService.Member changeRole(@PathVariable UUID orgId, @PathVariable UUID userId,
+                                        @Valid @RequestBody ChangeRole body, HttpServletRequest request) {
+        requireManager(request);
+        requireOwnerForOwners(request, orgId, userId, body.role());
+        return memberships.changeRole(orgId, userId, body.role(), CurrentUser.require().userId(),
+                ClientIp.of(request));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/members/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void removeMember(@PathVariable UUID orgId, @PathVariable UUID userId, HttpServletRequest request) {
+        requireManager(request);
+        requireOwnerForOwners(request, orgId, userId, null);
+        memberships.removeMember(orgId, userId, CurrentUser.require().userId(), ClientIp.of(request));
+    }
+
+    /**
+     * Owners are the one thing an admin may not touch: an admin who could demote an owner would effectively
+     * be an owner. Granting the owner role is owners-only for the same reason.
+     */
+    private void requireOwnerForOwners(HttpServletRequest request, UUID orgId, UUID userId, Role newRole) {
+        if (request.getAttribute(OrgAccessInterceptor.ROLE_ATTRIBUTE) == Role.owner) {
+            return;
+        }
+        if (newRole == Role.owner) {
+            throw new ForbiddenException("Only owners can make someone an owner");
+        }
+        if (memberships.roleFor(orgId, userId).orElse(null) == Role.owner) {
+            throw new ForbiddenException("Only owners can change or remove another owner");
+        }
     }
 
     @GetMapping("/audit-events")
