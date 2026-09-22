@@ -9,7 +9,6 @@ import static com.aesoftwaresolutions.solid.billing.Pdf.stamp;
 import static com.aesoftwaresolutions.solid.billing.Pdf.text;
 import static com.aesoftwaresolutions.solid.billing.Pdf.textRight;
 
-import com.aesoftwaresolutions.solid.money.Money;
 import com.aesoftwaresolutions.solid.org.LegalEntity;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -22,17 +21,19 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 
 /**
- * Draws one invoice on one page: plain, readable, and honest about a draft or a voided invoice.
+ * Draws one quote on a page.
  *
- * <p>Deliberately simple — one font, no logo. Branding is its own slice; getting the numbers and the status right
- * is this one.
+ * <p>A quote is not a bill, and this document goes out of its way not to look like one: no due date, no
+ * terms, no amount due, and a sentence saying in plain words what it is. Nobody should be able to pay from
+ * it by mistake.
  */
-final class InvoicePdf {
+final class QuotePdf {
 
-    private InvoicePdf() {
+    private QuotePdf() {
     }
 
-    static byte[] render(LegalEntity entity, BillingModels.Customer customer, BillingModels.Invoice invoice) {
+    static byte[] render(LegalEntity entity, BillingModels.Customer customer, QuoteModels.Quote quote,
+                         String invoiceNumber) {
         try (PDDocument document = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             PDPage page = new PDPage(PDRectangle.LETTER);
             document.addPage(page);
@@ -40,17 +41,16 @@ final class InvoicePdf {
             PDType1Font bold = Pdf.bold();
             float right = page.getMediaBox().getWidth() - MARGIN;
 
-            List<BillingModels.InvoiceLine> overflow = List.of();
+            List<QuoteModels.Line> overflow = List.of();
             try (PDPageContentStream content = new PDPageContentStream(document, page)) {
                 float y = page.getMediaBox().getHeight() - MARGIN;
 
                 text(content, bold, 18, MARGIN, y, entity.legalName());
                 y -= LINE * 2;
-                text(content, bold, 14, MARGIN, y, "INVOICE " + (invoice.invoiceNumber() == null
-                        ? "(draft)" : invoice.invoiceNumber()));
+                text(content, bold, 14, MARGIN, y, "QUOTE " + quote.quoteNumber());
                 y -= LINE + LINE / 2f;
 
-                text(content, regular, 10, MARGIN, y, "Bill to: " + customer.name());
+                text(content, regular, 10, MARGIN, y, "For: " + customer.name());
                 y -= LINE;
                 if (customer.billingAddress() != null && !customer.billingAddress().isBlank()) {
                     for (String addressLine : customer.billingAddress().split("\\R")) {
@@ -59,10 +59,13 @@ final class InvoicePdf {
                     }
                 }
                 y -= LINE / 2f;
-                text(content, regular, 10, MARGIN, y, "Issued " + invoice.issueDate()
-                        + "     Due " + invoice.dueDate()
-                        + "     Terms " + invoice.terms().replace('_', ' '));
-                y -= LINE * 2;
+                text(content, regular, 10, MARGIN, y, "Quoted " + quote.issueDate());
+                y -= LINE;
+                if (quote.validUntil() != null) {
+                    text(content, regular, 10, MARGIN, y, "This price holds until " + quote.validUntil() + ".");
+                    y -= LINE;
+                }
+                y -= LINE;
 
                 text(content, bold, 10, MARGIN, y, "Description");
                 text(content, bold, 10, MARGIN + 260, y, "Qty");
@@ -72,53 +75,40 @@ final class InvoicePdf {
                 rule(content, MARGIN, right, y + 4);
                 y -= LINE / 2f;
 
-                for (BillingModels.InvoiceLine line : invoice.lines()) {
-                    // Keep room for the totals block; a 200-line invoice must not run off the bottom of the page.
-                    if (y < MARGIN + LINE * 8) {
+                for (QuoteModels.Line line : quote.lines()) {
+                    // Room is kept for the total and the status sentence, so a long quote cannot run off the
+                    // bottom of the page.
+                    if (y < MARGIN + LINE * 7) {
                         text(content, regular, 9, MARGIN, y, "continued...");
-                        overflow = invoice.lines().subList(invoice.lines().indexOf(line), invoice.lines().size());
+                        overflow = quote.lines().subList(quote.lines().indexOf(line), quote.lines().size());
                         break;
                     }
                     text(content, regular, 10, MARGIN, y, fit(regular, line.description(), DESCRIPTION_WIDTH));
-                    text(content, regular, 10, MARGIN + 260, y, line.quantity().stripTrailingZeros().toPlainString());
-                    text(content, regular, 10, MARGIN + 320, y, money(line.unitPrice()));
-                    textRight(content, regular, 10, right, y, money(line.amount()));
+                    text(content, regular, 10, MARGIN + 260, y,
+                            line.quantity().stripTrailingZeros().toPlainString());
+                    text(content, regular, 10, MARGIN + 320, y, line.unitPrice().toDecimalString());
+                    textRight(content, regular, 10, right, y, line.amount().toDecimalString());
                     y -= LINE;
                 }
 
                 y -= LINE / 2f;
                 rule(content, MARGIN + 320, right, y + 8);
                 y -= LINE / 2f;
-                if (invoice.taxTotal().isPositive()) {
-                    total(content, regular, bold, right, y, "Sales tax", invoice.taxTotal());
-                    y -= LINE;
-                }
-                total(content, regular, bold, right, y, "Total", invoice.total());
-                y -= LINE;
-                total(content, regular, bold, right, y, "Paid", invoice.amountPaid());
-                y -= LINE;
-                total(content, bold, bold, right, y, "Amount due", invoice.balanceDue());
+                text(content, bold, 10, right - 200, y, "Total");
+                textRight(content, bold, 10, right, y,
+                        quote.total().toDecimalString() + " " + quote.total().currency());
                 y -= LINE * 2;
 
-                if (invoice.memo() != null && !invoice.memo().isBlank()) {
-                    text(content, regular, 10, MARGIN, y, fit(regular, invoice.memo(), right - MARGIN));
+                if (quote.memo() != null && !quote.memo().isBlank()) {
+                    text(content, regular, 10, MARGIN, y, fit(regular, quote.memo(), right - MARGIN));
                     y -= LINE * 2;
                 }
 
-                String status = switch (invoice.status()) {
-                    case "draft" -> "This invoice is a draft and has not been issued.";
-                    case "void" -> "This invoice has been voided and is not payable.";
-                    default -> null;
-                };
-                if (status != null) {
-                    text(content, bold, 11, MARGIN, y, status);
-                }
-
+                text(content, bold, 11, MARGIN, y, statusSentence(quote, invoiceNumber));
                 text(content, regular, 8, MARGIN, MARGIN, "Prepared with Solid");
             }
 
-            // Anything that did not fit goes on its own continuation pages, so no charge is ever lost.
-            List<BillingModels.InvoiceLine> remaining = overflow;
+            List<QuoteModels.Line> remaining = overflow;
             while (!remaining.isEmpty()) {
                 PDPage next = new PDPage(PDRectangle.LETTER);
                 document.addPage(next);
@@ -126,18 +116,17 @@ final class InvoicePdf {
                 int drawn = 0;
                 try (PDPageContentStream content = new PDPageContentStream(document, next)) {
                     float y = next.getMediaBox().getHeight() - MARGIN;
-                    text(content, bold, 12, MARGIN, y, "INVOICE " + (invoice.invoiceNumber() == null
-                            ? "(draft)" : invoice.invoiceNumber()) + " — continued");
+                    text(content, bold, 12, MARGIN, y, "QUOTE " + quote.quoteNumber() + " — continued");
                     y -= LINE * 2;
-                    for (BillingModels.InvoiceLine line : remaining) {
+                    for (QuoteModels.Line line : remaining) {
                         if (y < MARGIN + LINE * 2) {
                             break;
                         }
                         text(content, regular, 10, MARGIN, y, fit(regular, line.description(), DESCRIPTION_WIDTH));
                         text(content, regular, 10, MARGIN + 260, y,
                                 line.quantity().stripTrailingZeros().toPlainString());
-                        text(content, regular, 10, MARGIN + 320, y, money(line.unitPrice()));
-                        textRight(content, regular, 10, nextRight, y, money(line.amount()));
+                        text(content, regular, 10, MARGIN + 320, y, line.unitPrice().toDecimalString());
+                        textRight(content, regular, 10, nextRight, y, line.amount().toDecimalString());
                         y -= LINE;
                         drawn++;
                     }
@@ -146,9 +135,10 @@ final class InvoicePdf {
                 remaining = remaining.subList(drawn, remaining.size());
             }
 
-            String watermark = switch (invoice.status()) {
-                case "draft" -> "DRAFT";
-                case "void" -> "VOID";
+            String watermark = switch (quote.status()) {
+                case "expired" -> "EXPIRED";
+                case "declined" -> "DECLINED";
+                case "converted" -> "INVOICED";
                 default -> null;
             };
             if (watermark != null) {
@@ -158,17 +148,26 @@ final class InvoicePdf {
             document.save(out);
             return out.toByteArray();
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not render the invoice", e);
+            throw new UncheckedIOException("Could not render the quote", e);
         }
     }
 
-    private static void total(PDPageContentStream content, PDType1Font labelFont, PDType1Font valueFont, float right,
-                              float y, String label, Money amount) throws IOException {
-        text(content, labelFont, 10, right - 200, y, label);
-        textRight(content, valueFont, 10, right, y, money(amount) + " " + amount.currency());
-    }
-
-    private static String money(Money amount) {
-        return amount.toDecimalString();
+    /** What this document is, in one sentence, so it can never be mistaken for a demand for money. */
+    private static String statusSentence(QuoteModels.Quote quote, String invoiceNumber) {
+        return switch (quote.status()) {
+            case "draft" -> "This is a draft quote and has not been sent.";
+            // "billed" rather than "invoiced": the word invoice belongs only on a quote that became one, so
+            // nothing on this page can be read as a demand for money.
+            case "sent" -> "This is a quote, not a bill. Nothing is owed until the work is agreed and billed.";
+            case "accepted" -> "This quote has been accepted. A bill will follow; nothing is owed on this "
+                    + "document.";
+            case "declined" -> "This quote was declined"
+                    + (quote.declinedReason() == null ? "." : ": " + quote.declinedReason());
+            case "expired" -> "This quote expired on " + quote.validUntil() + " and the price is no longer held.";
+            case "converted" -> "This quote became invoice "
+                    + (invoiceNumber == null ? "(draft)" : invoiceNumber) + ". Pay against that invoice, not "
+                    + "this quote.";
+            default -> "This is a quote, not a bill.";
+        };
     }
 }

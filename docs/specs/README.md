@@ -58,5 +58,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 052 | Invoices that repeat | [052](052-recurring-invoices.md) | Done (owner review) | 012, 026 |
 | 053 | What is coming | [053](053-whats-coming.md) | Done (owner review) | 012, 013, 026, 039, 052 |
 | 054 | Quotes that become invoices | [054](054-quotes.md) | Done (owner review) | 012 |
+| 055 | Sending the quote | [055](055-quote-pdf.md) | Done (owner review) | 031, 054 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

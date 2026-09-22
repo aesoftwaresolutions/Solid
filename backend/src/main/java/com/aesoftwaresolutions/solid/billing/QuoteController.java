@@ -72,6 +72,20 @@ class QuoteController {
                 body.memo(), lines(body));
     }
 
+    @GetMapping("/{quoteId}/pdf")
+    org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> pdf(
+            @PathVariable UUID orgId, @PathVariable UUID entityId, @PathVariable UUID quoteId) {
+        QuoteModels.Quote quote = quotes.get(orgId, entityId, quoteId);
+        byte[] pdf = quotes.quotePdf(orgId, entityId, quoteId);
+        String name = "quote-" + quote.quoteNumber() + ".pdf";
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        org.springframework.http.ContentDisposition.attachment().filename(name).build().toString())
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .contentLength(pdf.length)
+                .body(new org.springframework.core.io.ByteArrayResource(pdf));
+    }
+
     @PostMapping("/{quoteId}/send")
     QuoteModels.Quote send(@PathVariable UUID orgId, @PathVariable UUID entityId, @PathVariable UUID quoteId) {
         return quotes.send(orgId, entityId, quoteId);

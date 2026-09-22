@@ -93,6 +93,19 @@ public class QuoteService {
         return orgScope.call(orgId, () -> load(entityId, quoteId, entity.baseCurrency()));
     }
 
+    /**
+     * The quote rendered as a PDF the customer can read. It is deliberately not invoice-shaped: no due date,
+     * no terms, no amount due.
+     */
+    public byte[] quotePdf(UUID orgId, UUID entityId, UUID quoteId) {
+        LegalEntity entity = orgs.getEntity(orgId, entityId);
+        QuoteModels.Quote quote = orgScope.call(orgId, () -> load(entityId, quoteId, entity.baseCurrency()));
+        BillingModels.Customer customer = billing.getCustomer(orgId, entityId, quote.customerId());
+        String invoiceNumber = quote.invoiceId() == null ? null
+                : billing.getInvoice(orgId, entityId, quote.invoiceId()).invoiceNumber();
+        return QuotePdf.render(entity, customer, quote, invoiceNumber);
+    }
+
     public QuoteModels.Quote send(UUID orgId, UUID entityId, UUID quoteId) {
         return transition(orgId, entityId, quoteId, "sent", "Only a draft quote can be sent", "draft");
     }

@@ -1355,6 +1355,8 @@ export const api = {
     `/api/v1/orgs/${orgId}/entities/${entityId}/customers/${customerId}/statement.pdf`,
   invoicePdfUrl: (orgId: string, entityId: string, invoiceId: string) =>
     `/api/v1/orgs/${orgId}/entities/${entityId}/invoices/${invoiceId}/pdf`,
+  quotePdfUrl: (orgId: string, entityId: string, quoteId: string) =>
+    `/api/v1/orgs/${orgId}/entities/${entityId}/quotes/${quoteId}/pdf`,
   entityExportUrl: (orgId: string, entityId: string) =>
     `/api/v1/orgs/${orgId}/entities/${entityId}/export.zip`,
   taxLinesCsvUrl: (orgId: string, entityId: string, taxYear: number) =>

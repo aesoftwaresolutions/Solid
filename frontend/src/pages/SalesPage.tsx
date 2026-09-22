@@ -216,6 +216,13 @@ export default function SalesPage() {
                     {quote.declinedReason ? ` — ${quote.declinedReason}` : ''}
                   </td>
                   <td>
+                    <a
+                      href={api.quotePdfUrl(orgId, entityId, quote.id)}
+                      aria-label={`Download quote ${quote.quoteNumber}`}
+                      download
+                    >
+                      PDF
+                    </a>{' '}
                     {quote.status === 'draft' && (
                       <button
                         type="button"
