@@ -58,6 +58,24 @@ describe('spec 040: importing a list from CSV', () => {
     expect(calls.map((c) => c.key)).toContain(`POST ${base}/imports/accounts`);
   });
 
+  test('spec 043: a failed import does not leave the Import button lit', async () => {
+    mockApi(
+      {
+        [`POST ${base}/imports/accounts/preview`]: goodPreview,
+        [`POST ${base}/imports/accounts`]: { detail: 'Account code 1000 is already used', code: 'ACCOUNT_CODE_TAKEN' },
+      },
+      { status: { [`POST ${base}/imports/accounts`]: 409 } },
+    );
+
+    renderPage();
+    fireEvent.change(screen.getByLabelText('CSV contents'), { target: { value: csv } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check the file' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Import 2 row(s)' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Account code 1000 is already used');
+    expect(screen.getByRole('button', { name: /^Import/ })).toBeDisabled();
+  });
+
   test('a file with a bad row cannot be imported, and the line is named', async () => {
     mockApi({
       [`POST ${base}/imports/accounts/preview`]: {

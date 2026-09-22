@@ -25,7 +25,7 @@ class BankSearchProvider implements SearchProvider {
         long amount = query.amountMinor() == null ? -1 : query.amountMinor();
         String where = """
                 from bank.bank_txn t join bank.bank_account a on a.id = t.bank_account_id
-                where a.entity_id = ? and (lower(t.description) like ? or abs(t.amount_minor) = ?)""";
+                where a.entity_id = ? and (lower(t.description) like ? escape '\\' or abs(t.amount_minor) = ?)""";
 
         int total = db.sql("select count(*) " + where).params(entityId, like, amount).query(Integer.class).single();
         List<SearchModels.Hit> hits = db.sql("""

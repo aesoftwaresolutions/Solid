@@ -137,6 +137,33 @@ class SearchTests {
         assertThat(entries.get("hits").get(0).get("label").asText()).isEqualTo("Coffee run 12");
     }
 
+    /** Spec 043: a wildcard typed by the person is a character to look for, not a licence to scan everything. */
+    @Test
+    void percentIsTreatedAsTextRatherThanAsAWildcard() {
+        journal("2026-03-04", "50% deposit on the press", "6220", "1010", "420.00", true);
+        journal("2026-03-05", "Ordinary coffee", "6220", "1010", "5.00", true);
+
+        assertThat(group(search("50%"), "journal_entry").orElseThrow().get("total").asInt()).isEqualTo(1);
+        // '%%' would once have matched every row of every table; now it matches the text '%%', which is nowhere.
+        assertThat(search("%%").get("groups")).isEmpty();
+    }
+
+    /**
+     * Spec 043: an amount finds a bill of that size. The predicate uses {@code abs()} so it keeps the promise
+     * the page makes — "whichever way the money went" — even though today a bill total cannot be negative.
+     */
+    @Test
+    void anAmountFindsABillOfThatSize() {
+        String vendorId = api.post(base + "/vendors", Map.of("name", "Press Co"), HttpStatus.CREATED)
+                .get("id").asText();
+        api.post(base + "/bills", Map.of("vendorId", vendorId, "billDate", "2026-03-04", "terms", "net_30",
+                        "lines", List.of(Map.of("expenseAccountId", acct.get("6220"), "description", "Printing",
+                                "amount", money("420.00")))),
+                HttpStatus.CREATED);
+
+        assertThat(requireGroup(search("420"), "bill").get("total").asInt()).isEqualTo(1);
+    }
+
     @Test
     void ac7_ac8_anotherEntityAndAnotherOrganizationStayOut() {
         journal("2026-03-04", "Printer repair", "6220", "1010", "420.00", true);

@@ -27,7 +27,7 @@ class DocumentSearchProvider implements SearchProvider {
         String like = "%" + query.text() + "%";
         String where = """
                 from doc.document d
-                where d.entity_id = ? and (lower(d.filename) like ? or lower(coalesce(d.note, '')) like ?)""";
+                where d.entity_id = ? and (lower(d.filename) like ? escape '\\' or lower(coalesce(d.note, '')) like ? escape '\\')""";
         int total = db.sql("select count(*) " + where).params(entityId, like, like).query(Integer.class).single();
         List<SearchModels.Hit> hits = db.sql("select d.id, d.filename, d.kind, d.uploaded_at " + where
                 + " order by d.uploaded_at desc limit " + query.limitPerKind())

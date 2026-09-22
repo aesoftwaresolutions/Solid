@@ -34,11 +34,11 @@ class LedgerSearchProvider implements SearchProvider {
         String entryWhere = """
                 from gl.journal_entry e
                 where e.entity_id = ?
-                  and (lower(coalesce(e.memo, '')) like ?
+                  and (lower(coalesce(e.memo, '')) like ? escape '\\'
                        or exists (select 1 from gl.journal_line l
                                   where l.journal_entry_id = e.id and abs(l.amount_minor) = ?)
                        or exists (select 1 from gl.journal_line l
-                                  where l.journal_entry_id = e.id and lower(coalesce(l.memo, '')) like ?))""";
+                                  where l.journal_entry_id = e.id and lower(coalesce(l.memo, '')) like ? escape '\\'))""";
 
         int entryTotal = db.sql("select count(*) " + entryWhere)
                 .params(entityId, like, amount, like).query(Integer.class).single();
@@ -56,7 +56,7 @@ class LedgerSearchProvider implements SearchProvider {
 
         String accountWhere = """
                 from gl.account a
-                where a.entity_id = ? and (lower(a.name) like ? or lower(a.code) like ?)""";
+                where a.entity_id = ? and (lower(a.name) like ? escape '\\' or lower(a.code) like ? escape '\\')""";
         int accountTotal = db.sql("select count(*) " + accountWhere)
                 .params(entityId, like, like).query(Integer.class).single();
         List<SearchModels.Hit> accounts = db.sql("select a.id, a.code, a.name, a.type " + accountWhere

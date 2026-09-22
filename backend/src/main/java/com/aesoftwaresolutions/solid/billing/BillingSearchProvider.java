@@ -27,7 +27,7 @@ class BillingSearchProvider implements SearchProvider {
 
         String customerWhere = """
                 from ar_ap.customer c
-                where c.entity_id = ? and (lower(c.name) like ? or lower(coalesce(c.email, '')) like ?)""";
+                where c.entity_id = ? and (lower(c.name) like ? escape '\\' or lower(coalesce(c.email, '')) like ? escape '\\')""";
         int customerTotal = db.sql("select count(*) " + customerWhere)
                 .params(entityId, like, like).query(Integer.class).single();
         List<SearchModels.Hit> customers = db.sql("select c.id, c.name, c.email " + customerWhere
@@ -39,8 +39,8 @@ class BillingSearchProvider implements SearchProvider {
 
         String invoiceWhere = """
                 from ar_ap.invoice i join ar_ap.customer c on c.id = i.customer_id
-                where i.entity_id = ? and (lower(i.invoice_number) like ? or lower(coalesce(i.memo, '')) like ?
-                                           or lower(c.name) like ? or i.total_minor = ?)""";
+                where i.entity_id = ? and (lower(i.invoice_number) like ? escape '\\' or lower(coalesce(i.memo, '')) like ? escape '\\'
+                                           or lower(c.name) like ? escape '\\' or abs(i.total_minor) = ?)""";
         int invoiceTotal = db.sql("select count(*) " + invoiceWhere)
                 .params(entityId, like, like, like, amount).query(Integer.class).single();
         List<SearchModels.Hit> invoices = db.sql("""
@@ -56,7 +56,7 @@ class BillingSearchProvider implements SearchProvider {
 
         String vendorWhere = """
                 from ar_ap.vendor v
-                where v.entity_id = ? and (lower(v.name) like ? or lower(coalesce(v.email, '')) like ?)""";
+                where v.entity_id = ? and (lower(v.name) like ? escape '\\' or lower(coalesce(v.email, '')) like ? escape '\\')""";
         int vendorTotal = db.sql("select count(*) " + vendorWhere)
                 .params(entityId, like, like).query(Integer.class).single();
         List<SearchModels.Hit> vendors = db.sql("select v.id, v.name, v.email " + vendorWhere
@@ -68,9 +68,9 @@ class BillingSearchProvider implements SearchProvider {
 
         String billWhere = """
                 from ar_ap.bill b join ar_ap.vendor v on v.id = b.vendor_id
-                where b.entity_id = ? and (lower(coalesce(b.vendor_reference, '')) like ?
-                                           or lower(coalesce(b.memo, '')) like ?
-                                           or lower(v.name) like ? or b.total_minor = ?)""";
+                where b.entity_id = ? and (lower(coalesce(b.vendor_reference, '')) like ? escape '\\'
+                                           or lower(coalesce(b.memo, '')) like ? escape '\\'
+                                           or lower(v.name) like ? escape '\\' or abs(b.total_minor) = ?)""";
         int billTotal = db.sql("select count(*) " + billWhere)
                 .params(entityId, like, like, like, amount).query(Integer.class).single();
         List<SearchModels.Hit> bills = db.sql("""

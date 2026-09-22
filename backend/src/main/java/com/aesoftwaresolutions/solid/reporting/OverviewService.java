@@ -28,16 +28,23 @@ public class OverviewService {
     static final String NOTE = "Totals are a plain sum of the entities, not a consolidation: amounts owed "
             + "between entities of this organization are still counted on both sides.";
 
-    /** @param setUp false for an entity with no chart of accounts yet — its figures are zero, not a result */
+    /**
+     * @param from  the first day of the period these figures cover — the entity's own fiscal year when the
+     *              caller did not ask for a specific period, so this line agrees with that entity's reports
+     * @param setUp false for an entity with no chart of accounts yet — its figures are zero, not a result
+     */
     public record EntityLine(UUID entityId, String legalName, String kind, String currency, boolean setUp,
-                             Money cash, Money netIncome, int draftEntries, int uncategorizedBankTransactions,
-                             boolean needsAttention) {
+                             LocalDate from, LocalDate to, Money cash, Money netIncome, int draftEntries,
+                             int uncategorizedBankTransactions, boolean needsAttention) {
     }
 
     public record Totals(String currency, Money cash, Money netIncome) {
     }
 
-    /** @param totals null when the entities do not share one currency */
+    /**
+     * @param from   null when no period was asked for and each entity used its own fiscal year
+     * @param totals null when the entities do not share one currency
+     */
     public record Overview(UUID orgId, LocalDate from, LocalDate to, boolean mixedCurrencies,
                            List<EntityLine> entities, Totals totals, String note) {
     }
@@ -59,27 +66,37 @@ public class OverviewService {
         this.bank = bank;
     }
 
+    /**
+     * @param from null to give each entity the year so far <em>of its own fiscal year</em>, so that a line here
+     *             matches that entity's own profit &amp; loss instead of quietly using the calendar year
+     */
     public Overview overview(UUID orgId, LocalDate from, LocalDate to) {
-        if (from.isAfter(to)) {
+        if (from != null && from.isAfter(to)) {
             throw new IllegalArgumentException("'from' must be on or before 'to'");
         }
         orgs.getOrganization(orgId);
         List<LegalEntity> entities = new ArrayList<>(orgs.listEntities(orgId));
         entities.sort((a, b) -> a.legalName().compareToIgnoreCase(b.legalName()));
 
-        List<EntityLine> lines = new ArrayList<>();
-        for (LegalEntity entity : entities) {
-            String ccy = entity.baseCurrency();
-            boolean setUp = accountCount(orgId, entity.id()) > 0;
-            Money cash = setUp ? cashFlow.cashAsOf(orgId, entity.id(), to) : Money.zero(ccy);
-            Money netIncome = setUp
-                    ? reports.profitAndLoss(orgId, entity.id(), from, to).netIncome()
-                    : Money.zero(ccy);
-            int drafts = draftEntries(orgId, entity.id());
-            int uncategorized = bank.countUncategorized(orgId, entity.id());
-            lines.add(new EntityLine(entity.id(), entity.legalName(), entity.kind(), ccy, setUp, cash, netIncome,
-                    drafts, uncategorized, drafts > 0 || uncategorized > 0));
-        }
+        // One transaction for the whole page: the inner services join it, so every figure comes from the same
+        // snapshot of the books and one entity cannot be a moment newer than the next.
+        List<EntityLine> lines = orgScope.call(orgId, () -> {
+            List<EntityLine> result = new ArrayList<>();
+            for (LegalEntity entity : entities) {
+                String ccy = entity.baseCurrency();
+                LocalDate start = from != null ? from : ReportService.fiscalYearStart(to, entity.fiscalYearEnd());
+                boolean setUp = accountCount(entity.id()) > 0;
+                Money cash = setUp ? cashFlow.cashAsOf(orgId, entity.id(), to) : Money.zero(ccy);
+                Money netIncome = setUp
+                        ? reports.profitAndLoss(orgId, entity.id(), start, to).netIncome()
+                        : Money.zero(ccy);
+                int drafts = draftEntries(entity.id());
+                int uncategorized = bank.countUncategorized(orgId, entity.id());
+                result.add(new EntityLine(entity.id(), entity.legalName(), entity.kind(), ccy, setUp, start, to,
+                        cash, netIncome, drafts, uncategorized, drafts > 0 || uncategorized > 0));
+            }
+            return result;
+        });
 
         Set<String> currencies = lines.stream().map(EntityLine::currency).collect(Collectors.toSet());
         boolean mixed = currencies.size() > 1;
@@ -97,14 +114,15 @@ public class OverviewService {
         return new Overview(orgId, from, to, mixed, List.copyOf(lines), totals, NOTE);
     }
 
-    private int accountCount(UUID orgId, UUID entityId) {
-        return orgScope.call(orgId, () -> db.sql("select count(*) from gl.account where entity_id = ?")
-                .param(entityId).query(Integer.class).single());
+    // Both run inside the overview's own organization scope.
+
+    private int accountCount(UUID entityId) {
+        return db.sql("select count(*) from gl.account where entity_id = ?")
+                .param(entityId).query(Integer.class).single();
     }
 
-    private int draftEntries(UUID orgId, UUID entityId) {
-        return orgScope.call(orgId, () -> db
-                .sql("select count(*) from gl.journal_entry where entity_id = ? and status = 'draft'")
-                .param(entityId).query(Integer.class).single());
+    private int draftEntries(UUID entityId) {
+        return db.sql("select count(*) from gl.journal_entry where entity_id = ? and status = 'draft'")
+                .param(entityId).query(Integer.class).single();
     }
 }

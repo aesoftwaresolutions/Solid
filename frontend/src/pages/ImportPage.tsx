@@ -47,7 +47,13 @@ export default function ImportPage() {
         setResult(r);
         setCommitted(r.committed);
       })
-      .catch(setError)
+      .catch((e) => {
+        // The old preview no longer describes what would happen, so it goes: otherwise the Import button
+        // stays lit on a file that has just proved it cannot be imported.
+        setResult(undefined);
+        setCommitted(false);
+        setError(e);
+      })
       .finally(() => setBusy(false));
   };
 
@@ -55,11 +61,14 @@ export default function ImportPage() {
     if (!file) {
       return;
     }
-    file.text().then((text) => {
-      setCsv(text);
-      setResult(undefined);
-      setCommitted(false);
-    });
+    file
+      .text()
+      .then((text) => {
+        setCsv(text);
+        setResult(undefined);
+        setCommitted(false);
+      })
+      .catch(setError);
   };
 
   return (

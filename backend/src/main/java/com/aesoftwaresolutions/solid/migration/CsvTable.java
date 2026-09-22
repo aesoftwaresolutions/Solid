@@ -17,7 +17,7 @@ import java.util.Map;
  */
 final class CsvTable {
 
-    /** One data row, remembering the line number it came from so a problem can be pointed at. */
+    /** One data row, remembering the physical line it started on so a problem can be pointed at. */
     record Row(int line, Map<String, String> cells) {
 
         String get(String column) {
@@ -60,28 +60,42 @@ final class CsvTable {
         return name == null ? "" : name.replace("﻿", "").toLowerCase(Locale.ROOT).replaceAll("[\\s_-]", "");
     }
 
+    /** Roughly the biggest a file of {@code maxRows} sensible rows can be; anything larger is not read at all. */
+    static final int MAX_BYTES_PER_ROW = 2_000;
+
     static CsvTable parse(String content, int maxRows) {
-        List<List<String>> raw = readRows(content);
+        // Checked before a single row is built: a 40 MB paste must be refused, not turned into four million
+        // String objects first and rejected afterwards.
+        if (content.length() > (long) maxRows * MAX_BYTES_PER_ROW) {
+            throw new BusinessRuleException("IMPORT_TOO_LARGE",
+                    "The file is too big to import (the limit is about " + (maxRows * MAX_BYTES_PER_ROW / 1_000_000)
+                            + " MB and " + maxRows + " rows)");
+        }
+        // maxRows data rows plus the header, plus one more so that an over-long file can be detected.
+        List<Record> raw = readRows(content, maxRows + 2);
         if (raw.isEmpty()) {
             throw new BusinessRuleException("IMPORT_EMPTY", "The file is empty");
         }
-        List<String> header = raw.get(0).stream().map(h -> h.replace("﻿", "").trim()).toList();
+        List<String> header = raw.get(0).cells().stream().map(h -> h.replace("﻿", "").trim()).toList();
         if (header.stream().allMatch(String::isBlank)) {
             throw new BusinessRuleException("IMPORT_NO_HEADER", "The first line must name the columns");
         }
-        // Counted before reading the rows, so an enormous file is turned away rather than half-processed.
+        // The reader stops one record past the limit, so this catches an over-long file without having built
+        // the whole of it.
         if (raw.size() - 1 > maxRows) {
             throw new BusinessRuleException("IMPORT_TOO_MANY_ROWS",
-                    "The file has " + (raw.size() - 1) + " rows; the limit is " + maxRows);
+                    "The file has more than " + maxRows + " rows, which is the limit");
         }
         List<Row> rows = new ArrayList<>();
         for (int i = 1; i < raw.size(); i++) {
-            List<String> cells = raw.get(i);
+            List<String> cells = raw.get(i).cells();
             Map<String, String> byName = new LinkedHashMap<>();
             for (int c = 0; c < header.size(); c++) {
                 byName.put(normalise(header.get(c)), c < cells.size() ? cells.get(c) : "");
             }
-            Row row = new Row(i + 1, byName);
+            // The physical line, not the record number: a quoted address with a newline in it must not push
+            // every later problem one line out of place.
+            Row row = new Row(raw.get(i).line(), byName);
             if (!row.isBlank()) {
                 rows.add(row);
             }
@@ -89,13 +103,22 @@ final class CsvTable {
         return new CsvTable(header, List.copyOf(rows));
     }
 
-    /** RFC 4180-style reader: quoted fields, doubled quotes, commas and newlines inside quotes. */
-    private static List<List<String>> readRows(String content) {
-        List<List<String>> rows = new ArrayList<>();
+    /** One record of the file, and the physical line its first character sat on. */
+    private record Record(int line, List<String> cells) {
+    }
+
+    /**
+     * RFC 4180-style reader: quoted fields, doubled quotes, commas and newlines inside quotes. It stops once
+     * {@code maxRecords} records exist, so an over-long file costs only as much as the limit allows.
+     */
+    private static List<Record> readRows(String content, int maxRecords) {
+        List<Record> rows = new ArrayList<>();
         List<String> row = new ArrayList<>();
         StringBuilder field = new StringBuilder();
         boolean quoted = false;
-        for (int i = 0; i < content.length(); i++) {
+        int line = 1;
+        int recordStartLine = 1;
+        for (int i = 0; i < content.length() && rows.size() < maxRecords; i++) {
             char c = content.charAt(i);
             if (quoted) {
                 if (c == '"') {
@@ -106,6 +129,9 @@ final class CsvTable {
                         quoted = false;
                     }
                 } else {
+                    if (c == '\n') {
+                        line++;
+                    }
                     field.append(c);
                 }
             } else if (c == '"') {
@@ -119,18 +145,25 @@ final class CsvTable {
                 }
                 row.add(field.toString());
                 field.setLength(0);
-                rows.add(row);
+                rows.add(new Record(recordStartLine, row));
                 row = new ArrayList<>();
+                line++;
+                recordStartLine = line;
             } else {
                 field.append(c);
             }
         }
+        if (rows.size() >= maxRecords) {
+            // Stopped at the limit: whatever comes after, including an open quote, is the caller's problem
+            // to report as "too many rows".
+            return rows;
+        }
         if (quoted) {
             throw new BusinessRuleException("IMPORT_UNCLOSED_QUOTE", "A quoted value is never closed");
         }
-        if (field.length() > 0 || !row.isEmpty()) {
+        if ((field.length() > 0 || !row.isEmpty()) && rows.size() < maxRecords) {
             row.add(field.toString());
-            rows.add(row);
+            rows.add(new Record(recordStartLine, row));
         }
         return rows;
     }

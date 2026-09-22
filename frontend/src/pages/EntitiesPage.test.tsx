@@ -16,6 +16,7 @@ const entities = [
 
 const line = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
   entityId: id, legalName: name, kind: 'smllc', currency: 'USD', setUp: true,
+  from: '2026-01-01', to: '2026-09-19',
   cash: money('2800.00'), netIncome: money('2800.00'), draftEntries: 0,
   uncategorizedBankTransactions: 0, needsAttention: false, ...extra,
 });
@@ -39,7 +40,7 @@ describe('spec 041: the whole organization on one page', () => {
     renderPage({
       orgId: 'o1', from: '2026-01-01', to: '2026-09-19', mixedCurrencies: false,
       entities: [
-        line('e2', 'Alpha Household'),
+        line('e2', 'Alpha Household', { from: '2026-07-01' }),
         line('e1', 'Zeta Shop LLC', { draftEntries: 1, uncategorizedBankTransactions: 3, needsAttention: true }),
       ],
       totals: { currency: 'USD', cash: money('5600.00'), netIncome: money('5600.00') },
@@ -52,6 +53,25 @@ describe('spec 041: the whole organization on one page', () => {
     expect(screen.getByText('All entities (USD)')).toBeInTheDocument();
     expect(screen.getAllByText('5,600.00')).toHaveLength(2);
     expect(screen.getByText(/not a consolidation/)).toBeInTheDocument();
+    // Spec 043: each line says which period it covers, because two entities can be on different fiscal years.
+    expect(screen.getByText('2026-07-01 → 2026-09-19')).toBeInTheDocument();
+  });
+
+  test('spec 043: a failing overview says so instead of vanishing', async () => {
+    mockApi(
+      { 'GET /api/v1/orgs/o1/entities': entities, 'GET /api/v1/orgs/o1/overview': { detail: 'Overview broke' } },
+      { status: { 'GET /api/v1/orgs/o1/overview': 500 } },
+    );
+    render(
+      <MemoryRouter initialEntries={['/orgs/o1']}>
+        <Routes>
+          <Route path="/orgs/:orgId" element={<EntitiesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Overview broke');
+    expect(screen.queryByText('How the year is going')).not.toBeInTheDocument();
   });
 
   test('two currencies are shown side by side with no total invented', async () => {

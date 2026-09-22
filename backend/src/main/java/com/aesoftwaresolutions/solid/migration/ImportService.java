@@ -136,10 +136,12 @@ public class ImportService {
         Plan plan = new Plan(Kind.accounts, table.ignoredColumns(ACCOUNT_COLUMNS));
         requireColumns(table, "code", "name", "type");
 
+        // Account codes are matched exactly, because the database's uniqueness rule is exact: treating CASH
+        // and cash as the same account would silently drop a row the books would happily have accepted.
         Map<String, Account> existing = new LinkedHashMap<>();
         for (Account account : accounts.list(orgId, entityId)) {
-            existing.put(account.code().toLowerCase(Locale.ROOT), account);
-            plan.accountIdsByCode.put(account.code().toLowerCase(Locale.ROOT), account.id());
+            existing.put(account.code(), account);
+            plan.accountIdsByCode.put(account.code(), account.id());
         }
         // Rows planned so far, so a parent named earlier in the same file can be checked and later linked.
         record Planned(AccountType type, boolean header) {
@@ -154,7 +156,7 @@ public class ImportService {
                 plan.problem(row.line(), key, "A code and a name are both required");
                 continue;
             }
-            String lower = code.toLowerCase(Locale.ROOT);
+            String lower = code;
             if (inFile.containsKey(lower)) {
                 plan.problem(row.line(), key, "Code " + code + " appears more than once in this file");
                 continue;
@@ -179,12 +181,17 @@ public class ImportService {
             }
             String parentCode = blankToNull(row.get("parent"));
             if (parentCode != null) {
-                String parentLower = parentCode.toLowerCase(Locale.ROOT);
+                String parentLower = parentCode;
                 Account parentOnFile = existing.get(parentLower);
                 Planned parentInFile = inFile.get(parentLower);
                 if (parentOnFile == null && parentInFile == null) {
                     plan.problem(row.line(), key, "Parent " + parentCode
                             + " is not in the books and does not appear earlier in this file");
+                    continue;
+                }
+                if (parentOnFile != null && parentOnFile.isArchived()) {
+                    plan.problem(row.line(), key, "Parent " + parentCode + " is archived, so nothing can be "
+                            + "filed under it; un-archive it first or give this row another parent");
                     continue;
                 }
                 AccountType parentType = parentOnFile != null ? parentOnFile.type() : parentInFile.type();
@@ -203,8 +210,13 @@ public class ImportService {
             inFile.put(lower, new Planned(type, header));
             String subtype = blankToNull(row.get("subtype"));
             boolean isHeader = header;
+            String refusal = accounts.rejectionReason(type, code, name, subtype, isHeader, taxLine);
+            if (refusal != null) {
+                plan.problem(row.line(), key, refusal);
+                continue;
+            }
             plan.ok(row.line(), code, Action.create, name + " (" + type + ")", p -> {
-                UUID parentId = parentCode == null ? null : p.accountIdsByCode.get(parentCode.toLowerCase(Locale.ROOT));
+                UUID parentId = parentCode == null ? null : p.accountIdsByCode.get(parentCode);
                 Account created = accounts.create(orgId, entityId, code, name, type, subtype, parentId, isHeader,
                         taxLine);
                 p.accountIdsByCode.put(lower, created.id());
@@ -234,7 +246,8 @@ public class ImportService {
             }
             inFile.put(key(name), row.line());
             if (existing.containsKey(key(name))) {
-                plan.ok(row.line(), name, Action.skip, "'" + name + "' is already a customer", null);
+                plan.ok(row.line(), name, Action.skip,
+                        "'" + existing.get(key(name)).name() + "' is already a customer", null);
                 continue;
             }
             String email = blankToNull(row.get("email"));
@@ -269,6 +282,13 @@ public class ImportService {
                 continue;
             }
             inFile.put(key(name), row.line());
+            if (existing.containsKey(key(name))) {
+                // Checked before the optional columns: re-running an imported file must stay a no-op even if
+                // the account one of its rows points at has since been archived.
+                plan.ok(row.line(), name, Action.skip,
+                        "'" + existing.get(key(name)).name() + "' is already a vendor", null);
+                continue;
+            }
             Boolean is1099 = bool(row.get("1099"), false);
             if (is1099 == null) {
                 plan.problem(row.line(), name, "1099 '" + row.get("1099") + "' should be yes or no");
@@ -287,10 +307,6 @@ public class ImportService {
                             "Account " + expenseCode + " is not an expense account you can post to");
                     continue;
                 }
-            }
-            if (existing.containsKey(key(name))) {
-                plan.ok(row.line(), name, Action.skip, "'" + name + "' is already a vendor", null);
-                continue;
             }
             String email = blankToNull(row.get("email"));
             String phone = blankToNull(row.get("phone"));

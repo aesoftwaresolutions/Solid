@@ -135,6 +135,33 @@ public class AccountService {
         return find(entityId, id);
     }
 
+    /**
+     * Why an account with these values could not be created, or null when it is fine. The importer asks this
+     * before it writes anything, so a file is either reported row by row or accepted — never half-checked and
+     * then rejected by a database constraint.
+     */
+    public String rejectionReason(AccountType type, String code, String name, String subtype, boolean isHeader,
+                                  String taxLineCode) {
+        if (code == null || !code.matches("[A-Za-z0-9.\\-]{1,20}")) {
+            return "Code '" + code + "' must be 1-20 characters, letters, digits, dots or hyphens";
+        }
+        if (name == null || name.trim().isEmpty() || name.trim().length() > 120) {
+            return "Name must be 1-120 characters";
+        }
+        if (subtype != null && !subtype.matches("[a-z_]{1,40}")) {
+            return "Subtype '" + subtype + "' must be lower-case letters and underscores";
+        }
+        if (isHeader && taxLineCode != null) {
+            return "A header account cannot carry a tax line";
+        }
+        try {
+            validateTaxLine(type, isHeader, blankToNull(taxLineCode));
+        } catch (BusinessRuleException | IllegalArgumentException e) {
+            return e.getMessage();
+        }
+        return null;
+    }
+
     private void validateTaxLine(AccountType type, boolean isHeader, String taxLineCode) {
         if (taxLineCode == null) {
             return;

@@ -94,7 +94,8 @@ public class ReportService {
     }
 
     /** First day of the fiscal year containing {@code date}, for a fiscal year ending in month {@code fyEndMonth}. */
-    static LocalDate fiscalYearStart(LocalDate date, int fyEndMonth) {
+    /** The first day of the fiscal year that contains {@code date}, for an entity whose year ends in that month. */
+    public static LocalDate fiscalYearStart(LocalDate date, int fyEndMonth) {
         LocalDate candidate = LocalDate.of(date.getYear(), fyEndMonth, 1).plusMonths(1);
         return candidate.isAfter(date) ? candidate.minusYears(1) : candidate;
     }

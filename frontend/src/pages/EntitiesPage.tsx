@@ -77,6 +77,8 @@ export default function EntitiesPage() {
         </Card>
       )}
 
+      <ErrorMessage error={overview.error} />
+
       {overview.value && overview.value.entities.length > 0 && (
         <Card title="How the year is going">
           <table>
@@ -85,6 +87,7 @@ export default function EntitiesPage() {
                 <th>Entity</th>
                 <th>Cash</th>
                 <th>Net income</th>
+                <th>Period</th>
                 <th>Waiting for you</th>
               </tr>
             </thead>
@@ -98,6 +101,10 @@ export default function EntitiesPage() {
                     {line.setUp ? <MoneyCell>{formatMoney(line.cash)}</MoneyCell> : <span className="muted">not set up yet</span>}
                   </td>
                   <td>{line.setUp ? <MoneyCell>{formatMoney(line.netIncome)}</MoneyCell> : ''}</td>
+                  {/* Each entity's own fiscal year, which is why two lines can cover different months. */}
+                  <td className="muted">
+                    {line.from} → {line.to}
+                  </td>
                   <td>
                     {line.needsAttention
                       ? [
@@ -123,6 +130,7 @@ export default function EntitiesPage() {
                   <th>
                     <MoneyCell>{formatMoney(overview.value.totals.netIncome)}</MoneyCell>
                   </th>
+                  <th />
                   <th />
                 </tr>
               </tfoot>

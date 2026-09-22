@@ -592,6 +592,9 @@ export interface OverviewEntityLine {
   currency: string;
   /** False for an entity with no chart of accounts yet: its figures are zero, not a result. */
   setUp: boolean;
+  /** The period these figures cover — the entity's own fiscal year unless the caller asked for one. */
+  from: string;
+  to: string;
   cash: Money;
   netIncome: Money;
   draftEntries: number;
@@ -601,7 +604,8 @@ export interface OverviewEntityLine {
 
 export interface Overview {
   orgId: string;
-  from: string;
+  /** Null when no period was asked for and each entity used its own fiscal year. */
+  from: string | null;
   to: string;
   mixedCurrencies: boolean;
   entities: OverviewEntityLine[];

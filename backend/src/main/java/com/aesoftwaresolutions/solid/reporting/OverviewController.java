@@ -19,14 +19,16 @@ class OverviewController {
         this.overview = overview;
     }
 
-    /** Defaults to the year so far, which is what someone asking "how are we doing?" usually means. */
+    /**
+     * With no dates, each entity reports the year so far of <em>its own</em> fiscal year, which is what
+     * someone asking "how are we doing?" means, and what that entity's own reports show.
+     */
     @GetMapping("/overview")
     OverviewService.Overview overview(
             @PathVariable UUID orgId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         LocalDate end = to != null ? to : LocalDate.now();
-        LocalDate start = from != null ? from : end.withDayOfYear(1);
-        return overview.overview(orgId, start, end);
+        return overview.overview(orgId, from, end);
     }
 }

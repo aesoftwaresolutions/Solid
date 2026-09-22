@@ -37,7 +37,7 @@ public class SearchService {
             return new SearchModels.Results(text, null, List.of());
         }
         Long amountMinor = amountOf(text);
-        SearchModels.Query query = new SearchModels.Query(text, amountMinor, LIMIT_PER_KIND);
+        SearchModels.Query query = new SearchModels.Query(forLike(text), amountMinor, LIMIT_PER_KIND);
 
         List<SearchModels.Group> groups = new ArrayList<>();
         orgScope.run(orgId, () -> {
@@ -55,6 +55,16 @@ public class SearchService {
         groups.sort(Comparator.comparing(SearchModels.Group::kind));
         Money interpreted = amountMinor == null ? null : Money.ofMinor(amountMinor, entity.baseCurrency());
         return new SearchModels.Results(text, interpreted, List.copyOf(groups));
+    }
+
+    /**
+     * Escapes the characters LIKE treats as wildcards. Without this a query of {@code %} would match every row
+     * of every table — an easy way to make the database do a great deal of work — and someone looking for a
+     * "50% discount" memo could never find it. Providers wrap the result in {@code %...%} and add
+     * {@code escape '\'} to each predicate.
+     */
+    static String forLike(String text) {
+        return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     /**

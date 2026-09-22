@@ -136,6 +136,30 @@ class OverviewTests {
         assertThat(fresh.get("netIncome").get("amount").asText()).isEqualTo("0.00");
     }
 
+    /**
+     * Spec 043: with no period asked for, each line uses that entity's own fiscal year, so the overview and
+     * the entity's own reports show the same profit.
+     */
+    @Test
+    void anEntityWhoseYearEndsInJuneGetsItsOwnYear() {
+        String shop = api.post("/api/v1/orgs/" + org + "/entities",
+                Map.of("kind", "smllc", "legalName", "June Year LLC", "fiscalYearEnd", 6), HttpStatus.CREATED)
+                .get("id").asText();
+        Map<String, String> codes = chart(shop, "schedule_c");
+        post(shop, codes, java.time.LocalDate.now().withMonth(2).withDayOfMonth(1).toString(),
+                "1010", "4010", "500.00", true);   // February: last fiscal year if the year ends in June
+
+        JsonNode result = api.get("/api/v1/orgs/" + org + "/overview");
+        JsonNode line = line(result, "June Year LLC");
+
+        assertThat(result.get("from").isNull()).as("no period was asked for").isTrue();
+        assertThat(line.get("from").asText()).endsWith("-07-01");
+        JsonNode pnl = api.get("/api/v1/orgs/" + org + "/entities/" + shop + "/reports/profit-and-loss?from="
+                + line.get("from").asText() + "&to=" + line.get("to").asText());
+        assertThat(line.get("netIncome").get("amount").asText())
+                .isEqualTo(pnl.get("netIncome").get("amount").asText());
+    }
+
     @Test
     void ac7_anotherOrganizationSeesNothing() {
         entity("Zeta Shop LLC", "smllc");
