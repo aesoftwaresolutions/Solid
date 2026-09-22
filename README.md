@@ -18,7 +18,7 @@ Sign in (with mandatory two-factor), create an organization and its entities, an
 | **Assets & deductions** | Fixed assets with straight-line book depreciation and disposal, mileage log, home-office declaration |
 | **Personal** | Household chart of accounts, monthly budgets, budget vs actual |
 | **Documents** | An encrypted vault for receipts and paperwork, linked to the records they support |
-| **Reports** | Trial balance, P&L, balance sheet, statement of cash flows, tax-line report with a readiness check, year-end checklist, full CSV export |
+| **Reports** | Trial balance, P&L, balance sheet, statement of cash flows, what is scheduled for the next 90 days with the lowest point it reaches, tax-line report with a readiness check, year-end checklist, full CSV export |
 | **Across entities** | One page for the whole organization: cash, net income and what is waiting, per entity, with a total only when the currencies match |
 | **People** | Invitations with single-use, hashed, expiring links; roles that can be changed and access taken away, with the last owner protected; password change, administrator-issued resets, a command-line way back in, and a list of your own sessions you can end |
 | **Getting started** | A setup list computed from the books themselves — what is done, what is next, what is genuinely optional — plus per-entity settings |

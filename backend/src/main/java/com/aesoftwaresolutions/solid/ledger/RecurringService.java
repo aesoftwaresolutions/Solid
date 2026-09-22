@@ -130,6 +130,30 @@ public class RecurringService {
         });
     }
 
+    /** One occurrence a template will post if it is run, with the lines it would post. */
+    public record Upcoming(UUID templateId, String name, LocalDate date, List<RecurringModels.Line> lines) {
+    }
+
+    /**
+     * What the active templates would post between now and {@code through}, without posting anything. Used by
+     * the "what is coming" page (spec 053), so that page cannot disagree with what a run would do.
+     */
+    public List<Upcoming> upcoming(UUID orgId, UUID entityId, LocalDate through) {
+        List<Upcoming> result = new ArrayList<>();
+        for (RecurringModels.Recurring template : list(orgId, entityId)) {
+            if (!template.active()) {
+                continue;
+            }
+            LocalDate lastPosted = orgScope.call(orgId, () -> db.sql(
+                    "select max(occurrence_date) from gl.recurring_occurrence where recurring_id = ?")
+                    .param(template.id()).query(LocalDate.class).optional().orElse(null));
+            for (LocalDate date : dueDates(template, through, lastPosted)) {
+                result.add(new Upcoming(template.id(), template.name(), date, template.lines()));
+            }
+        }
+        return result;
+    }
+
     /** Posts every occurrence due on or before {@code through} that has not been posted yet. */
     public RecurringModels.RunResult run(UUID orgId, UUID entityId, LocalDate through) {
         orgs.getEntity(orgId, entityId);

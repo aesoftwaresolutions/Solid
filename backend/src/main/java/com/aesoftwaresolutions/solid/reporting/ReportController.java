@@ -15,8 +15,11 @@ class ReportController {
     private final ReportService reports;
     private final TaxLineReportService taxLines;
     private final CashFlowService cashFlow;
+    private final WhatsComingService whatsComing;
 
-    ReportController(ReportService reports, TaxLineReportService taxLines, CashFlowService cashFlow) {
+    ReportController(ReportService reports, TaxLineReportService taxLines, CashFlowService cashFlow,
+                     WhatsComingService whatsComing) {
+        this.whatsComing = whatsComing;
         this.reports = reports;
         this.taxLines = taxLines;
         this.cashFlow = cashFlow;
@@ -31,6 +34,18 @@ class ReportController {
                                       iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
                               LocalDate to) {
         return cashFlow.cashFlow(orgId, entityId, from, to);
+    }
+
+    @GetMapping("/whats-coming")
+    WhatsComingService.WhatsComing whatsComing(
+            @PathVariable UUID orgId, @PathVariable UUID entityId,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate to) {
+        LocalDate start = from == null ? LocalDate.now() : from;
+        LocalDate end = to == null ? start.plusDays(90) : to;
+        return whatsComing.whatsComing(orgId, entityId, start, end);
     }
 
     @GetMapping("/tax-lines")

@@ -46,6 +46,7 @@ export default function ReportsPage() {
   const tax = useLoader(() => api.taxLines(orgId, entityId, year), [orgId, entityId, year]);
   const checklist = useLoader(() => api.yearEndChecklist(orgId, entityId, year), [orgId, entityId, year]);
   const cash = useLoader(() => api.cashFlow(orgId, entityId, from, to), [orgId, entityId, from, to]);
+  const coming = useLoader(() => api.whatsComing(orgId, entityId), [orgId, entityId]);
 
   return (
     <main>
@@ -128,6 +129,69 @@ export default function ReportsPage() {
               </tr>
             </tbody>
           </table>
+        )}
+      </Card>
+
+      <Card title="What is coming (next 90 days)">
+        <ErrorMessage error={coming.error} />
+        {!coming.value && !coming.error && <Loading what="what is scheduled" />}
+        {coming.value && (
+          <>
+            <p className="muted">{coming.value.note}</p>
+            <div className="stats">
+              <div className="stat">
+                <div className="muted">Cash today</div>
+                <div className="value">{formatMoney(coming.value.openingCash)}</div>
+              </div>
+              <div className="stat">
+                <div className="muted">Scheduled in</div>
+                <div className="value">{formatMoney(coming.value.totals.in)}</div>
+              </div>
+              <div className="stat">
+                <div className="muted">Scheduled out</div>
+                <div className="value">{formatMoney(coming.value.totals.out)}</div>
+              </div>
+              <div className="stat">
+                <div className="muted">Lowest point</div>
+                <div className="value">
+                  {coming.value.lowestPoint ? formatMoney(coming.value.lowestPoint.projectedBalance) : '—'}
+                </div>
+                {coming.value.lowestPoint && (
+                  <span className="muted">on {coming.value.lowestPoint.date}</span>
+                )}
+              </div>
+            </div>
+            {coming.value.items.length === 0 ? (
+              <p className="muted">Nothing is scheduled in the next 90 days.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>What</th>
+                    <th className="money">In</th>
+                    <th className="money">Out</th>
+                    <th className="money">Balance after</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coming.value.items.map((item, index) => (
+                    <tr key={`${item.date}-${item.kind}-${index}`}>
+                      <td>{item.date}</td>
+                      <td>{item.description}</td>
+                      <td className="money">
+                        {item.amountIn.amount === '0.00' ? '' : formatMoney(item.amountIn)}
+                      </td>
+                      <td className="money">
+                        {item.amountOut.amount === '0.00' ? '' : formatMoney(item.amountOut)}
+                      </td>
+                      <td className="money">{formatMoney(item.projectedBalance)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
         )}
       </Card>
 

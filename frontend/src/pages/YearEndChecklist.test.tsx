@@ -33,6 +33,11 @@ const common = {
     netChange: money('50.00'), closingCash: money('150.00'),
     note: 'Prepared by the direct method from the posted ledger.',
   },
+  [`GET ${base}/reports/whats-coming`]: {
+    from: `${year}-01-01`, to: `${year}-03-31`, currency: 'USD', openingCash: money('0.00'),
+    items: [], totals: { in: money('0.00'), out: money('0.00'), net: money('0.00'), projectedClosing: money('0.00') },
+    lowestPoint: null, note: 'This lists what is already scheduled. It is not a forecast.',
+  },
   [`GET ${base}/reports/tax-lines`]: {
     taxYear: year, from: `${year}-01-01`, to: `${year}-12-31`, lines: [], unmapped: [],
     totals: { income: money('0.00'), costOfGoodsSold: money('0.00'), expenses: money('0.00'), netProfit: money('0.00') },
@@ -93,5 +98,43 @@ describe('spec 036: year-end checklist on the reports page', () => {
 
     expect(await screen.findByText(/The bookkeeping steps for this year are done/)).toBeInTheDocument();
     expect(screen.getByText(/your preparer decides that/)).toBeInTheDocument();
+  });
+});
+
+describe('spec 053: what is coming', () => {
+  test('shows the lowest point and says it is not a forecast', async () => {
+    mockApi({
+      ...common,
+      [`GET ${base}/reports/year-end-checklist`]: checklist(true),
+      [`GET ${base}/reports/whats-coming`]: {
+        from: '2026-09-22', to: '2026-12-21', currency: 'USD', openingCash: money('5000.00'),
+        items: [
+          {
+            date: '2026-10-07', kind: 'bill_due', description: 'Bill P-100', reference: 'P-100',
+            amountIn: money('0.00'), amountOut: money('4500.00'), projectedBalance: money('500.00'),
+          },
+          {
+            date: '2026-11-21', kind: 'invoice_due', description: 'Invoice INV-1001', reference: 'INV-1001',
+            amountIn: money('3000.00'), amountOut: money('0.00'), projectedBalance: money('3500.00'),
+          },
+        ],
+        totals: { in: money('3000.00'), out: money('4500.00'), net: money('-1500.00'), projectedClosing: money('3500.00') },
+        lowestPoint: {
+          date: '2026-10-07', kind: 'bill_due', description: 'Bill P-100', reference: 'P-100',
+          amountIn: money('0.00'), amountOut: money('4500.00'), projectedBalance: money('500.00'),
+        },
+        note: 'This lists what is already scheduled: invoices you have issued... It is not a forecast.',
+      },
+    });
+
+    renderReports();
+
+    expect(await screen.findByText('What is coming (next 90 days)')).toBeInTheDocument();
+    expect(screen.getByText(/not a forecast/)).toBeInTheDocument();
+    expect(screen.getByText('Lowest point')).toBeInTheDocument();
+    expect(screen.getByText('on 2026-10-07')).toBeInTheDocument();
+    const row = screen.getByText('Bill P-100').closest('tr') as HTMLElement;
+    expect(within(row).getByText('4,500.00')).toBeInTheDocument();
+    expect(within(row).getByText('500.00')).toBeInTheDocument();
   });
 });

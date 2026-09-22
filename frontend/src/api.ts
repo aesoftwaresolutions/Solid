@@ -582,6 +582,28 @@ export interface Invitation {
   token: string | null;
 }
 
+export interface WhatsComingItem {
+  date: string;
+  kind: 'invoice_due' | 'bill_due' | 'recurring_invoice' | 'recurring_entry';
+  description: string;
+  reference: string | null;
+  amountIn: Money;
+  amountOut: Money;
+  projectedBalance: Money;
+}
+
+export interface WhatsComing {
+  from: string;
+  to: string;
+  currency: string;
+  openingCash: Money;
+  items: WhatsComingItem[];
+  totals: { in: Money; out: Money; net: Money; projectedClosing: Money };
+  /** The worst day the arithmetic reaches, or null when nothing is scheduled. */
+  lowestPoint: WhatsComingItem | null;
+  note: string;
+}
+
 export interface RecurringInvoiceLine {
   id: string;
   lineNo: number;
@@ -1263,6 +1285,9 @@ export const api = {
       { method: 'POST', ...json({ csv }) },
       [422],
     ),
+
+  whatsComing: (orgId: string, entityId: string) =>
+    request<WhatsComing>(`/orgs/${orgId}/entities/${entityId}/reports/whats-coming`),
 
   cashFlow: (orgId: string, entityId: string, from: string, to: string) =>
     request<CashFlow>(`/orgs/${orgId}/entities/${entityId}/reports/cash-flow?from=${from}&to=${to}`),

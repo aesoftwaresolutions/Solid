@@ -128,6 +128,28 @@ public class RecurringInvoiceService {
         });
     }
 
+    /** One invoice a template will create if it is run. */
+    public record Upcoming(UUID templateId, String name, String customerName, LocalDate date, Money amount) {
+    }
+
+    /**
+     * What the active templates would create between now and {@code through}, without creating anything
+     * (spec 053). An archived customer's template is left out, exactly as a run would leave it out.
+     */
+    public List<Upcoming> upcoming(UUID orgId, UUID entityId, LocalDate through) {
+        List<Upcoming> result = new ArrayList<>();
+        for (RecurringInvoiceModels.RecurringInvoice template : list(orgId, entityId)) {
+            if (!template.active() || billing.getCustomer(orgId, entityId, template.customerId()).isArchived()) {
+                continue;
+            }
+            for (LocalDate date : dueDates(template, through, template.lastCreated())) {
+                result.add(new Upcoming(template.id(), template.name(), template.customerName(), date,
+                        template.total()));
+            }
+        }
+        return result;
+    }
+
     /** Creates every occurrence due on or before {@code through} that does not exist yet. */
     public RecurringInvoiceModels.RunResult run(UUID orgId, UUID entityId, LocalDate through) {
         orgs.getEntity(orgId, entityId);
