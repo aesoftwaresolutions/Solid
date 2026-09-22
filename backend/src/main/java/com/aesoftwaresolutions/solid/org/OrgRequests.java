@@ -29,6 +29,16 @@ final class OrgRequests {
             @Pattern(regexp = "[A-Z]{3}") String baseCurrency) {
     }
 
+    /**
+     * Only the settings that are safe to change after the books exist. The kind of entity and its base
+     * currency are not among them: both change what past entries mean.
+     */
+    record UpdateEntity(
+            @Size(max = 200) String legalName,
+            @Pattern(regexp = "cash|accrual") String accountingMethod,
+            @Pattern(regexp = "[A-Z]{2}") String homeState) {
+    }
+
     record CreateOwnership(
             @NotNull UUID ownerEntityId,
             @NotNull UUID ownedEntityId,

@@ -70,6 +70,17 @@ class OrgController {
         return orgs.getEntity(orgId, entityId);
     }
 
+    @org.springframework.web.bind.annotation.PatchMapping("/{orgId}/entities/{entityId}")
+    LegalEntity updateEntity(@PathVariable UUID orgId, @PathVariable UUID entityId,
+                             @Valid @RequestBody OrgRequests.UpdateEntity body) {
+        LegalEntity updated = orgs.updateEntity(orgId, entityId, body.legalName(), body.accountingMethod(),
+                body.homeState());
+        audit.record(AuditLog.Actor.current(), orgId, "entity_updated", "entity", entityId,
+                java.util.Map.of("homeState", String.valueOf(updated.homeState()),
+                        "accountingMethod", updated.accountingMethod()));
+        return updated;
+    }
+
     @PostMapping("/{orgId}/ownerships")
     @ResponseStatus(HttpStatus.CREATED)
     Ownership createOwnership(@PathVariable UUID orgId, @Valid @RequestBody OrgRequests.CreateOwnership body) {

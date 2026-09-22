@@ -38,6 +38,8 @@ export interface Entity {
   legalName: string;
   fiscalYearEnd: number;
   accountingMethod: string;
+  /** Two-letter state code, or null until someone says where this entity is based. */
+  homeState: string | null;
   baseCurrency: string;
 }
 
@@ -567,6 +569,22 @@ export interface CashFlow {
 }
 
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
+export interface SetupStep {
+  key: string;
+  title: string;
+  status: 'done' | 'todo' | 'optional';
+  detail: string;
+  /** The screen that does this step. */
+  where: string;
+}
+
+export interface Setup {
+  complete: boolean;
+  doneCount: number;
+  requiredCount: number;
+  steps: SetupStep[];
+}
+
 export interface SearchHit {
   kind: string;
   id: string;
@@ -701,6 +719,7 @@ export const api = {
     request<Organization>('/orgs', { method: 'POST', ...json({ name, kind }) }),
 
   entities: (orgId: string) => request<Entity[]>(`/orgs/${orgId}/entities`),
+  entity: (orgId: string, entityId: string) => request<Entity>(`/orgs/${orgId}/entities/${entityId}`),
   createEntity: (orgId: string, kind: string, legalName: string) =>
     request<Entity>(`/orgs/${orgId}/entities`, { method: 'POST', ...json({ kind, legalName }) }),
 
@@ -1065,6 +1084,11 @@ export const api = {
     method: 'PATCH',
     ...json(patch),
   }),
+
+  setup: (orgId: string, entityId: string) =>
+    request<Setup>(`/orgs/${orgId}/entities/${entityId}/setup`),
+  updateEntity: (orgId: string, entityId: string, patch: { legalName?: string; accountingMethod?: string; homeState?: string }) =>
+    request<Entity>(`/orgs/${orgId}/entities/${entityId}`, { method: 'PATCH', ...json(patch) }),
 
   search: (orgId: string, entityId: string, q: string) =>
     request<SearchResults>(`/orgs/${orgId}/entities/${entityId}/search?q=${encodeURIComponent(q)}`),

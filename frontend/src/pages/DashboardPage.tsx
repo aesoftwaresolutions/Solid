@@ -15,6 +15,7 @@ export default function DashboardPage() {
   const taxYear = new Date().getFullYear();
   const month = thisMonth();
 
+  const setup = useLoader(() => api.setup(orgId, entityId), [orgId, entityId]);
   const tax = useLoader(() => api.taxLines(orgId, entityId, taxYear), [orgId, entityId, taxYear]);
   const receivable = useLoader(() => api.arAging(orgId, entityId, today()), [orgId, entityId]);
   const payable = useLoader(() => api.apAging(orgId, entityId, today()), [orgId, entityId]);
@@ -35,6 +36,28 @@ export default function DashboardPage() {
   return (
     <main>
       <h1>Dashboard</h1>
+
+      {/* Only while there is something left to do: a finished setup should not keep nagging. */}
+      {setup.value && !setup.value.complete && (
+        <Card title={`Getting started · ${setup.value.doneCount} of ${setup.value.requiredCount} done`}>
+          <p className="muted">
+            The order matters — accounts before balances, balances before the first import.
+          </p>
+          <ul>
+            {setup.value.steps.map((step) => (
+              <li key={step.key}>
+                {step.status === 'done' ? '✓ ' : ''}
+                {step.status === 'done' ? (
+                  step.title
+                ) : (
+                  <Link to={`${base}/${step.where}`}>{step.title}</Link>
+                )}
+                {step.status === 'optional' ? ' (only if it applies)' : ''} — <span className="muted">{step.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Card title={`Tax year ${taxYear}`}>
         <ErrorMessage error={tax.error} />

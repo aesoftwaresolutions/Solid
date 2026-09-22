@@ -63,6 +63,31 @@ public class OrgService {
         });
     }
 
+    /**
+     * Changes the settings that are safe to change once there are books: the display name, the accounting
+     * method and the home state. A null means "leave it". The entity's kind and base currency are not here
+     * on purpose — changing either would rewrite the meaning of every entry already posted.
+     */
+    public LegalEntity updateEntity(UUID orgId, UUID entityId, String legalName, String accountingMethod,
+                                    String homeState) {
+        getOrganization(orgId);
+        return orgScope.call(orgId, () -> {
+            findEntity(entityId);
+            if (legalName != null && !legalName.isBlank()) {
+                db.sql("update org.entity set legal_name = ? where id = ?")
+                        .params(legalName.trim(), entityId).update();
+            }
+            if (accountingMethod != null) {
+                db.sql("update org.entity set accounting_method = ? where id = ?")
+                        .params(accountingMethod, entityId).update();
+            }
+            if (homeState != null) {
+                db.sql("update org.entity set home_state = ? where id = ?").params(homeState, entityId).update();
+            }
+            return findEntity(entityId);
+        });
+    }
+
     public List<LegalEntity> listEntities(UUID orgId) {
         getOrganization(orgId);
         return orgScope.call(orgId, () -> db.sql(ENTITY_SELECT + " order by created_at, id")

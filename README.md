@@ -20,6 +20,7 @@ Sign in (with mandatory two-factor), create an organization and its entities, an
 | **Documents** | An encrypted vault for receipts and paperwork, linked to the records they support |
 | **Reports** | Trial balance, P&L, balance sheet, statement of cash flows, tax-line report with a readiness check, year-end checklist, full CSV export |
 | **Across entities** | One page for the whole organization: cash, net income and what is waiting, per entity, with a total only when the currencies match |
+| **Getting started** | A setup list computed from the books themselves — what is done, what is next, what is genuinely optional — plus per-entity settings |
 | **Search** | One box across journal entries, accounts, bank transactions, customers, invoices, vendors, bills and documents — by text or by exact amount |
 | **Moving in** | CSV import of a chart of accounts, customer list or vendor list: previewed first, all-or-nothing, safe to re-run |
 | **Operations** | Backups and a restore drill, a master-key guard that refuses to start against the wrong key, an instance page, a generated OpenAPI document |
