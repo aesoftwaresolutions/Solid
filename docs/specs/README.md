@@ -62,5 +62,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 056 | The letterhead | [056](056-letterhead.md) | Done (owner review) | 031, 032, 055 |
 | 057 | Crediting a customer | [057](057-credit-notes.md) | Done (owner review) | 012, 032 |
 | 058 | Sales tax on a credit note | [058](058-credit-note-sales-tax.md) | Done (owner review; CPA ruling received) | 037, 057 |
+| 059 | Which period a credit belongs to | [059](059-credit-period.md) | Done (owner review; CPA ruling received) | 058 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

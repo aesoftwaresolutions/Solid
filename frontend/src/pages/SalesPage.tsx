@@ -45,6 +45,10 @@ export default function SalesPage() {
   const incomeAccounts = postable.filter((a) => a.type === 'income');
   const depositAccounts = postable.filter((a) => a.type === 'asset');
   const customerName = (id: string) => customers.value?.find((c) => c.id === id)?.name ?? '—';
+  // True once any credit note has reversed tax in the period: only then is the split worth showing.
+  const creditedTax = (taxReport.value?.jurisdictions ?? []).some(
+    (row) => row.taxCredited && row.taxCredited.amount !== '0.00',
+  );
 
   const act = (work: Promise<unknown>) => {
     setBusy(true);
@@ -488,11 +492,14 @@ export default function SalesPage() {
         {taxReport.value && taxReport.value.jurisdictions.length > 0 && (
           <>
             <h3>Collected this year</h3>
+            {/* The charged/credited split only earns its columns once something has been credited. */}
             <table>
               <thead>
                 <tr>
                   <th>Jurisdiction</th>
                   <th className="money">Taxable sales</th>
+                  {creditedTax && <th className="money">Tax charged</th>}
+                  {creditedTax && <th className="money">Tax credited</th>}
                   <th className="money">Tax collected</th>
                 </tr>
               </thead>
@@ -501,11 +508,45 @@ export default function SalesPage() {
                   <tr key={row.jurisdiction}>
                     <td>{row.jurisdiction}</td>
                     <td className="money">{formatMoney(row.taxableSales)}</td>
+                    {creditedTax && <td className="money">{formatMoney(row.taxCharged)}</td>}
+                    {creditedTax && <td className="money">{formatMoney(row.taxCredited)}</td>}
                     <td className="money">{formatMoney(row.taxCollected)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {(taxReport.value.priorPeriodAdjustments ?? []).length > 0 && (
+              <>
+                <h3>Credits against earlier periods</h3>
+                <p className="muted">
+                  These credits were issued in this period but undo tax charged in an earlier one. Solid counts
+                  them here and leaves the earlier period alone. If your state wants the original return
+                  amended instead, these are the ones to take to your accountant.
+                </p>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Credit</th>
+                      <th>Issued</th>
+                      <th>Original invoice</th>
+                      <th>Originally issued</th>
+                      <th className="money">Tax reversed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(taxReport.value.priorPeriodAdjustments ?? []).map((row) => (
+                      <tr key={`${row.creditNumber}-${row.invoiceNumber}`}>
+                        <td>{row.creditNumber}</td>
+                        <td>{row.creditDate}</td>
+                        <td>{row.invoiceNumber ?? '—'}</td>
+                        <td>{row.invoiceDate}</td>
+                        <td className="money">{formatMoney(row.taxReversed)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
             <p className="muted">{taxReport.value.note}</p>
           </>
         )}

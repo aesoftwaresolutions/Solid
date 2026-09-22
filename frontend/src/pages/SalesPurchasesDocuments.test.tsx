@@ -296,7 +296,12 @@ describe('spec 037: sales tax on the sales page', () => {
       [`GET ${base}/credit-notes`]: [],
       [`GET ${base}/reports/sales-tax`]: {
         from: '2026-01-01', to: '2026-09-19', currency: 'USD',
-        jurisdictions: [{ jurisdiction: 'Springfield, IL', ratePercent: '8.2500', taxableSales: money('1000.00'), taxCollected: money('82.50') }],
+        jurisdictions: [{
+          jurisdiction: 'Springfield, IL', ratePercent: '8.2500', taxableSales: money('1000.00'),
+          taxCollected: money('82.50'), taxableCharged: money('1000.00'), taxCharged: money('82.50'),
+          taxableCredited: money('0.00'), taxCredited: money('0.00'),
+        }],
+        priorPeriodAdjustments: [],
         totalTaxable: money('1000.00'), totalCollected: money('82.50'),
         note: 'Tax collected is money you are holding for the state, not income.',
       },
@@ -606,5 +611,46 @@ describe('spec 057: credit notes', () => {
         lines: [{ description: 'Overcharged', quantity: '1', invoiceLineId: 'il1' }],
       }),
     );
+  });
+});
+
+describe('spec 059: which period a credit belongs to', () => {
+  const customer = { id: 'c1', name: 'Northwind Traders', email: null, phone: null, isArchived: false };
+
+  test('names the credits that undo tax from an earlier period', async () => {
+    mockApi({
+      [`GET ${base}/accounts`]: accounts,
+      [`GET ${base}/customers`]: [customer],
+      [`GET ${base}/invoices`]: [],
+      [`GET ${base}/reports/accounts-receivable-aging`]: emptyAging,
+      [`GET ${base}/sales-tax-rates`]: [],
+      [`GET ${base}/recurring-invoices`]: [],
+      [`GET ${base}/quotes`]: [],
+      [`GET ${base}/credit-notes`]: [],
+      [`GET ${base}/reports/sales-tax`]: {
+        from: '2026-09-01', to: '2026-09-30', currency: 'USD',
+        jurisdictions: [{
+          jurisdiction: 'Springfield, IL', ratePercent: '8.2500', taxableSales: money('-200.00'),
+          taxCollected: money('-16.50'), taxableCharged: money('800.00'), taxCharged: money('66.00'),
+          taxableCredited: money('1000.00'), taxCredited: money('82.50'),
+        }],
+        totalTaxable: money('-200.00'), totalCollected: money('-16.50'),
+        priorPeriodAdjustments: [{
+          creditNumber: 'CN-0001', creditDate: '2026-09-15', invoiceNumber: 'INV-0007',
+          invoiceDate: '2026-08-03', jurisdiction: 'Springfield, IL',
+          taxableReversed: money('1000.00'), taxReversed: money('82.50'),
+        }],
+        note: 'Credit notes are treated as an ongoing adjustment…',
+      },
+    });
+    renderAt('/orgs/o1/entities/e1/sales', '/orgs/:orgId/entities/:entityId/sales', <SalesPage />);
+
+    expect(await screen.findByText('Credits against earlier periods')).toBeInTheDocument();
+    expect(screen.getByText(/these are the ones to take to your accountant/)).toBeInTheDocument();
+    expect(screen.getByText('INV-0007')).toBeInTheDocument();
+    expect(screen.getByText('2026-08-03')).toBeInTheDocument();
+    // The split is shown once anything has been credited.
+    expect(screen.getByText('Tax charged')).toBeInTheDocument();
+    expect(screen.getByText('66.00')).toBeInTheDocument();
   });
 });

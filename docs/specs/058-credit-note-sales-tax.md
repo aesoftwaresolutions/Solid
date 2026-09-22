@@ -62,6 +62,11 @@ line carried tax, the credit carries the matching tax back out.
 7. Crediting a line for more than it was charged is refused, counting credits already issued against it.
 8. Credit notes with no tax behave exactly as slice 057 left them (its tests pass untouched).
 
+## Which period the reversal falls in
+Confirmed by the CPA and implemented in spec 059: the period the credit note was issued, never by reopening
+the period of the original sale. Spec 059 also makes the report say so, and name the credits a state might
+want handled as an amended return instead.
+
 ## Out of scope
 Refunding the customer in cash (the credit reduces what is owed; a refund is a payment going the other way and
 is its own slice), returns of inventory, and use tax.

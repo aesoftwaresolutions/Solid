@@ -32,7 +32,11 @@ public class SalesTaxService {
 
     static final String REPORT_NOTE = "Tax collected is money you are holding for the state, not income. These "
             + "figures come from invoices you issued in the period (accrual). Your state may want a cash-basis "
-            + "figure, and the rates here are the ones you entered — checking them, and filing, is yours to do.";
+            + "figure, and the rates here are the ones you entered — checking them, and filing, is yours to do. "
+            + "Credit notes are treated as an ongoing adjustment: a reversal falls in the period the credit was "
+            + "issued, and no closed period is ever reopened. Some states instead want the original period's "
+            + "return amended; the prior-period adjustments below are exactly those credits, so you and your "
+            + "accountant can decide which your state requires.";
 
     private final JdbcClient db;
     private final OrgScope orgScope;
@@ -162,12 +166,15 @@ public class SalesTaxService {
             // (spec 058). Both sides are summed here so the report is what is actually owed to the state.
             List<Map<String, Object>> rows = db.sql("""
                     select jurisdiction, rate_percent,
-                           sum(taxable_minor) as taxable_minor,
-                           sum(tax_minor) as tax_minor
+                           sum(taxable_charged_minor) as taxable_charged_minor,
+                           sum(tax_charged_minor) as tax_charged_minor,
+                           sum(taxable_credited_minor) as taxable_credited_minor,
+                           sum(tax_credited_minor) as tax_credited_minor
                     from (
                         select r.jurisdiction, r.rate_percent,
-                               sum(l.amount_minor) as taxable_minor,
-                               sum(l.tax_amount_minor) as tax_minor
+                               sum(l.amount_minor) as taxable_charged_minor,
+                               sum(l.tax_amount_minor) as tax_charged_minor,
+                               0 as taxable_credited_minor, 0 as tax_credited_minor
                         from ar_ap.invoice_line l
                         join ar_ap.invoice i on i.id = l.invoice_id
                         join stx.tax_rate r on r.id = l.tax_rate_id
@@ -176,8 +183,9 @@ public class SalesTaxService {
                         group by r.jurisdiction, r.rate_percent
                         union all
                         select r.jurisdiction, r.rate_percent,
-                               -sum(cl.amount_minor) as taxable_minor,
-                               -sum(cl.tax_amount_minor) as tax_minor
+                               0 as taxable_charged_minor, 0 as tax_charged_minor,
+                               sum(cl.amount_minor) as taxable_credited_minor,
+                               sum(cl.tax_amount_minor) as tax_credited_minor
                         from ar_ap.credit_note_line cl
                         join ar_ap.credit_note cn on cn.id = cl.credit_note_id
                         join stx.tax_rate r on r.id = cl.tax_rate_id
@@ -193,16 +201,52 @@ public class SalesTaxService {
             Money taxable = Money.zero(ccy);
             Money collected = Money.zero(ccy);
             for (Map<String, Object> row : rows) {
-                Money rowTaxable = Money.ofMinor(((Number) row.get("taxable_minor")).longValue(), ccy);
-                Money rowTax = Money.ofMinor(((Number) row.get("tax_minor")).longValue(), ccy);
+                Money charged = Money.ofMinor(((Number) row.get("taxable_charged_minor")).longValue(), ccy);
+                Money chargedTax = Money.ofMinor(((Number) row.get("tax_charged_minor")).longValue(), ccy);
+                Money credited = Money.ofMinor(((Number) row.get("taxable_credited_minor")).longValue(), ccy);
+                Money creditedTax = Money.ofMinor(((Number) row.get("tax_credited_minor")).longValue(), ccy);
+                Money rowTaxable = charged.subtract(credited);
+                Money rowTax = chargedTax.subtract(creditedTax);
                 totals.add(new SalesTaxModels.JurisdictionTotal((String) row.get("jurisdiction"),
-                        (BigDecimal) row.get("rate_percent"), rowTaxable, rowTax));
+                        (BigDecimal) row.get("rate_percent"), rowTaxable, rowTax, charged, chargedTax,
+                        credited, creditedTax));
                 taxable = taxable.add(rowTaxable);
                 collected = collected.add(rowTax);
             }
             return new SalesTaxModels.SalesTaxReport(from, to, ccy, List.copyOf(totals), taxable, collected,
-                    REPORT_NOTE);
+                    priorPeriodAdjustments(entityId, from, to, ccy), REPORT_NOTE);
         });
+    }
+
+    /**
+     * Credits issued inside the period against invoices from before it.
+     *
+     * <p>Their tax counts in this period's figures, which is what an ongoing-adjustment system does. They are
+     * listed separately because a state that takes the amended-return view needs to know precisely which
+     * earlier returns are affected (spec 059).
+     */
+    private List<SalesTaxModels.PriorPeriodAdjustment> priorPeriodAdjustments(UUID entityId, LocalDate from,
+                                                                              LocalDate to, String ccy) {
+        return db.sql("""
+                        select cn.credit_number, cn.issue_date as credit_date, i.invoice_number,
+                               i.issue_date as invoice_date, r.jurisdiction,
+                               cl.amount_minor, cl.tax_amount_minor
+                        from ar_ap.credit_note_line cl
+                        join ar_ap.credit_note cn on cn.id = cl.credit_note_id
+                        join ar_ap.invoice_line il on il.id = cl.invoice_line_id
+                        join ar_ap.invoice i on i.id = il.invoice_id
+                        join stx.tax_rate r on r.id = cl.tax_rate_id
+                        where cn.entity_id = :entity and cn.status = 'issued'
+                          and cn.issue_date between :from and :to
+                          and i.issue_date < :from
+                        order by cn.issue_date, cn.credit_number""")
+                .param("entity", entityId).param("from", from).param("to", to)
+                .query((rs, n) -> new SalesTaxModels.PriorPeriodAdjustment(rs.getString("credit_number"),
+                        rs.getObject("credit_date", LocalDate.class), rs.getString("invoice_number"),
+                        rs.getObject("invoice_date", LocalDate.class), rs.getString("jurisdiction"),
+                        Money.ofMinor(rs.getLong("amount_minor"), ccy),
+                        Money.ofMinor(rs.getLong("tax_amount_minor"), ccy)))
+                .list();
     }
 
     private static final String SELECT = """

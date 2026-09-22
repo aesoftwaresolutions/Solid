@@ -594,9 +594,32 @@ export interface SalesTaxReport {
   from: string;
   to: string;
   currency: string;
-  jurisdictions: { jurisdiction: string; ratePercent: string; taxableSales: Money; taxCollected: Money }[];
+  jurisdictions: {
+    jurisdiction: string;
+    ratePercent: string;
+    /** Net of credits, as it has always been. */
+    taxableSales: Money;
+    taxCollected: Money;
+    taxableCharged: Money;
+    taxCharged: Money;
+    taxableCredited: Money;
+    taxCredited: Money;
+  }[];
   totalTaxable: Money;
   totalCollected: Money;
+  /**
+   * Credits issued in this period against invoices from an earlier one. Solid counts them here and never
+   * reopens the old period; a state that wants the original return amended needs exactly this list.
+   */
+  priorPeriodAdjustments: {
+    creditNumber: string;
+    creditDate: string;
+    invoiceNumber: string | null;
+    invoiceDate: string;
+    jurisdiction: string;
+    taxableReversed: Money;
+    taxReversed: Money;
+  }[];
   note: string;
 }
 

@@ -162,6 +162,66 @@ class CreditNoteTaxTests {
         assertThat(after.get("totalTaxable").get("amount").asText()).isEqualTo("0.00");
     }
 
+    /** Spec 059 AC 1-4: the period a credit falls in, and what the report says about it. */
+    @Test
+    void spec059_theReportSeparatesChargedFromCreditedAndNamesPriorPeriodAdjustments() {
+        // An invoice from last month, credited this month: the classic case the CPA's caveat is about.
+        LocalDate lastMonth = today.minusMonths(1);
+        String oldInvoice = api.post(base + "/invoices", Map.of(
+                "customerId", customerId,
+                "issueDate", lastMonth.toString(),
+                "terms", "net_30",
+                "lines", List.of(Map.of("description", "Widgets", "quantity", "1",
+                        "unitPrice", money("1000.00"), "incomeAccountId", acct.get("4010"),
+                        "taxRateId", rateId))), HttpStatus.CREATED).get("id").asText();
+        String oldLineId = api.post(base + "/invoices/" + oldInvoice + "/finalize", Map.of(), HttpStatus.OK)
+                .get("lines").get(0).get("id").asText();
+        // And an invoice inside this period, also credited, which is not an adjustment to anything filed.
+        String thisPeriodLine = taxedInvoice("500.00").get("lines").get(0).get("id").asText();
+
+        String creditOld = credit("1000.00", oldLineId, HttpStatus.CREATED).get("id").asText();
+        api.post(base + "/credit-notes/" + creditOld + "/issue", Map.of(), HttpStatus.OK);
+        String creditNew = credit("200.00", thisPeriodLine, HttpStatus.CREATED).get("id").asText();
+        api.post(base + "/credit-notes/" + creditNew + "/issue", Map.of(), HttpStatus.OK);
+
+        JsonNode report = api.get(base + "/reports/sales-tax?from=" + today.withDayOfMonth(1) + "&to="
+                + today.plusDays(1));
+        JsonNode row = report.get("jurisdictions").get(0);
+        // AC1: charged and credited are both visible, and the net is charged minus credited.
+        assertThat(row.get("taxCharged").get("amount").asText()).isEqualTo("41.25");       // 500.00 × 8.25%
+        assertThat(row.get("taxCredited").get("amount").asText()).isEqualTo("99.00");      // 82.50 + 16.50
+        assertThat(row.get("taxCollected").get("amount").asText()).isEqualTo("-57.75");
+        assertThat(row.get("taxableCharged").get("amount").asText()).isEqualTo("500.00");
+        assertThat(row.get("taxableCredited").get("amount").asText()).isEqualTo("1200.00");
+
+        // AC2: last month's invoice, credited this month, is named — and its tax still counts here.
+        JsonNode adjustments = report.get("priorPeriodAdjustments");
+        assertThat(adjustments).hasSize(1);
+        assertThat(adjustments.get(0).get("invoiceDate").asText()).isEqualTo(lastMonth.toString());
+        assertThat(adjustments.get(0).get("creditDate").asText()).isEqualTo(today.toString());
+        assertThat(adjustments.get(0).get("taxReversed").get("amount").asText()).isEqualTo("82.50");
+        assertThat(adjustments.get(0).get("invoiceNumber").asText()).isNotBlank();
+        assertThat(adjustments.get(0).get("creditNumber").asText()).isNotBlank();
+        assertThat(report.get("totalCollected").get("amount").asText())
+                .as("the old period is not reopened; the reversal lands here").isEqualTo("-57.75");
+
+        // AC4: the report says which model this is.
+        assertThat(report.get("note").asText())
+                .contains("ongoing adjustment").contains("amended");
+    }
+
+    @Test
+    void spec059_aCreditWithinItsOwnPeriodIsNotAnAdjustmentToAnything() {
+        String lineId = taxedInvoice("500.00").get("lines").get(0).get("id").asText();
+        String creditId = credit("500.00", lineId, HttpStatus.CREATED).get("id").asText();
+        api.post(base + "/credit-notes/" + creditId + "/issue", Map.of(), HttpStatus.OK);
+
+        JsonNode report = api.get(base + "/reports/sales-tax?from=" + today.minusDays(1) + "&to="
+                + today.plusDays(1));
+        assertThat(report.get("priorPeriodAdjustments")).isEmpty();
+        assertThat(report.get("totalCollected").get("amount").asText()).isEqualTo("0.00");
+    }
+
     @Test
     void ac6_aCreditThatNamesNoLineCarriesNoTax() {
         JsonNode credit = credit("100.00", null, HttpStatus.CREATED);
