@@ -77,11 +77,9 @@ public class ApiClient {
                 throw new IllegalArgumentException("That account already has MFA; pass its secret");
             }
             this.mfaSecret = knownSecret;
-            // The current step's code may already have been spent by this user's other session, and a code
-            // can only be used once; the next step is inside the accepted window.
-            post("/api/v1/auth/mfa/verify",
-                    Map.of("code", Totp.codeAt(mfaSecret, Totp.stepAt(Instant.now()) + 1)),
-                    HttpStatus.NO_CONTENT);
+            // A code can only be used once, and this user's other sessions may have spent the codes around
+            // now, so walk forward through the accepted window until one is accepted.
+            verifyWithAFreshCode();
         } else {
             this.mfaSecret = Base32.decode(post("/api/v1/auth/mfa/enroll", Map.of(), HttpStatus.OK)
                     .get("secret").asText());
@@ -89,6 +87,47 @@ public class ApiClient {
                     HttpStatus.OK);
         }
         return this;
+    }
+
+    /**
+     * A TOTP code is good once per user, and the server only accepts the step before, the current one and
+     * the next. When this user's other sessions have already spent those, the only thing to do is wait for
+     * the clock to move on — which a second session for the same person legitimately has to do.
+     */
+    private void verifyWithAFreshCode() {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            JsonNode problem = exchangeAllowing(HttpMethod.POST, "/api/v1/auth/mfa/verify",
+                    Map.of("code", Totp.codeAt(mfaSecret, Totp.stepAt(Instant.now()) + 1)));
+            if (problem == null) {
+                return;
+            }
+            sleepToNextStep();
+        }
+        throw new IllegalStateException("Could not verify MFA with a fresh code");
+    }
+
+    private static void sleepToNextStep() {
+        try {
+            Thread.sleep((31 - (System.currentTimeMillis() / 1000) % 30) * 1000L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Returns null when the call succeeded, or the problem body when it was refused with 401. */
+    private JsonNode exchangeAllowing(HttpMethod method, String path, Object body) {
+        HttpHeaders headers = new HttpHeaders();
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+        ResponseEntity<JsonNode> response = http.exchange(path, method, new HttpEntity<>(body, headers),
+                JsonNode.class);
+        if (response.getStatusCode().is2xxSuccessful()) {
+            return null;
+        }
+        assertThat(response.getStatusCode()).as("MFA verify -> " + response.getBody())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        return response.getBody();
     }
 
     public String email() {

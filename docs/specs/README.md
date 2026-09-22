@@ -54,5 +54,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 048 | Changing a password, and getting back in | [048](048-passwords.md) | Done (owner + security review) | 007, 046 |
 | 049 | Tax figures you supply, with their source | [049](049-tax-figures-you-supply.md) | Done (owner review; CPA review needed) | 015, 013, 021 |
 | 050 | Fixes from the third review | [050](050-third-review-fixes.md) | Done (security review) | 044-049 |
+| 051 | Where you are signed in | [051](051-where-you-are-signed-in.md) | Done (owner + security review) | 007, 048 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

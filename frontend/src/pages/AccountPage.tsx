@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { Card, ErrorMessage } from '../components';
+import { Card, ErrorMessage, Loading, useLoader } from '../components';
 import { useAuth } from '../auth';
 
 /** Your own account: the one place to change your password. */
@@ -13,6 +13,9 @@ export default function AccountPage() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
+  const sessions = useLoader(() => api.sessions(), []);
+  const [sessionError, setSessionError] = useState<unknown>(undefined);
+  const [signedOut, setSignedOut] = useState<number | null>(null);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -70,6 +73,79 @@ export default function AccountPage() {
           </button>
           {done && <span role="status"> Changed. Your other sessions are signed out.</span>}
         </form>
+      </Card>
+
+      <Card title="Where you are signed in">
+        <p className="muted">
+          What was recorded when each session started: the address it came from and what the browser called
+          itself. Nothing else — Solid does not know where you were.
+        </p>
+        <ErrorMessage error={sessions.error} />
+        <ErrorMessage error={sessionError} />
+        {!sessions.value && !sessions.error && <Loading what="your sessions" />}
+        {sessions.value && (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>Started</th>
+                  <th>Last used</th>
+                  <th>From</th>
+                  <th>Browser</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.value.map((session) => (
+                  <tr key={session.id}>
+                    <td>{session.createdAt?.slice(0, 16).replace('T', ' ')}</td>
+                    <td>{session.lastSeenAt?.slice(0, 16).replace('T', ' ')}</td>
+                    <td>{session.ip ?? ''}</td>
+                    <td className="muted">{(session.userAgent ?? '').slice(0, 60)}</td>
+                    <td>
+                      {session.current ? (
+                        <span className="muted">this one</span>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label={`End the session from ${session.ip ?? 'unknown'}`}
+                          onClick={() =>
+                            api
+                              .revokeSession(session.id)
+                              .then(() => {
+                                setSessionError(undefined);
+                                sessions.reload();
+                              })
+                              .catch(setSessionError)
+                          }
+                        >
+                          End it
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p>
+              <button
+                type="button"
+                onClick={() =>
+                  api
+                    .revokeOtherSessions()
+                    .then((result) => {
+                      setSignedOut(result.revoked);
+                      sessions.reload();
+                    })
+                    .catch(setSessionError)
+                }
+              >
+                Sign out everywhere else
+              </button>
+              {signedOut !== null && <span role="status"> Ended {signedOut} other session(s).</span>}
+            </p>
+          </>
+        )}
       </Card>
 
       <Card title="If you forget it">

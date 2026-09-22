@@ -36,9 +36,11 @@ class AuthController {
     private final MembershipService memberships;
     private final InvitationService invitations;
     private final PasswordService passwords;
+    private final SessionService sessions;
 
     AuthController(IamService iam, MembershipService memberships, InvitationService invitations,
-                   PasswordService passwords) {
+                   PasswordService passwords, SessionService sessions) {
+        this.sessions = sessions;
         this.invitations = invitations;
         this.passwords = passwords;
         this.iam = iam;
@@ -80,6 +82,23 @@ class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void resetPassword(@Valid @RequestBody ResetPasswordRequest body, HttpServletRequest request) {
         passwords.useReset(body.token(), body.newPassword(), ClientIp.of(request));
+    }
+
+    @GetMapping("/sessions")
+    List<SessionService.SessionInfo> sessions() {
+        return sessions.list(CurrentUser.require());
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/sessions/{sessionId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void revokeSession(@org.springframework.web.bind.annotation.PathVariable java.util.UUID sessionId,
+                       HttpServletRequest request) {
+        sessions.revoke(CurrentUser.require(), sessionId, ClientIp.of(request));
+    }
+
+    @PostMapping("/sessions/revoke-others")
+    Map<String, Integer> revokeOtherSessions(HttpServletRequest request) {
+        return Map.of("revoked", sessions.revokeOthers(CurrentUser.require(), ClientIp.of(request)));
     }
 
     @PostMapping("/signup")

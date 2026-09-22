@@ -582,6 +582,18 @@ export interface Invitation {
   token: string | null;
 }
 
+export interface SessionInfo {
+  id: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  ip: string | null;
+  userAgent: string | null;
+  mfaVerified: boolean;
+  /** True for the session making this request. */
+  current: boolean;
+}
+
 export interface TaxFigure {
   id: string;
   key: string;
@@ -1117,6 +1129,12 @@ export const api = {
     request<{ valid: boolean; postedEntries: number; firstInvalidSeq: number | null }>(
       `/orgs/${orgId}/entities/${entityId}/journal/verify`,
     ),
+  sessions: () => request<SessionInfo[]>('/auth/sessions'),
+  revokeSession: (sessionId: string) =>
+    request<void>(`/auth/sessions/${sessionId}`, { method: 'DELETE' }),
+  revokeOtherSessions: () =>
+    request<{ revoked: number }>('/auth/sessions/revoke-others', { method: 'POST', ...json({}) }),
+
   changePassword: (currentPassword: string, newPassword: string) =>
     request<void>('/auth/change-password', { method: 'POST', ...json({ currentPassword, newPassword }) }),
   resetPassword: (token: string, newPassword: string) =>

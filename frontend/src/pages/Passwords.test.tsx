@@ -20,6 +20,7 @@ describe('spec 048: changing a password', () => {
   test('sends both passwords and says the other sessions are gone', async () => {
     const { calls } = mockApi({
       'GET /api/v1/auth/me': me,
+      'GET /api/v1/auth/sessions': [],
       'POST /api/v1/auth/change-password': {},
     });
 
@@ -37,7 +38,7 @@ describe('spec 048: changing a password', () => {
   });
 
   test('says what to do when nobody can sign in', async () => {
-    mockApi({ 'GET /api/v1/auth/me': me });
+    mockApi({ 'GET /api/v1/auth/me': me, 'GET /api/v1/auth/sessions': [] });
     renderApp(<AccountPage />, '/account');
 
     expect(await screen.findByText(/--solid.reset-password=your@email/)).toBeInTheDocument();
@@ -91,5 +92,38 @@ describe('spec 048: using a reset link', () => {
   test('a link with no token says so', () => {
     renderReset('/reset-password');
     expect(screen.getByRole('alert')).toHaveTextContent('no reset token');
+  });
+});
+
+describe('spec 051: where you are signed in', () => {
+  const sessions = [
+    {
+      id: 's1', createdAt: '2026-09-21T08:00:00Z', lastSeenAt: '2026-09-21T09:30:00Z', ip: '203.0.113.7',
+      userAgent: 'Mozilla/5.0 (Macintosh)', mfaVerified: true, current: true, expiresAt: '2026-09-21T20:00:00Z',
+    },
+    {
+      id: 's2', createdAt: '2026-09-20T08:00:00Z', lastSeenAt: '2026-09-20T18:00:00Z', ip: '198.51.100.4',
+      userAgent: 'Mozilla/5.0 (Android)', mfaVerified: true, current: false, expiresAt: '2026-09-21T20:00:00Z',
+    },
+  ];
+
+  test('lists the sessions, ends one, and signs out everywhere else', async () => {
+    const { calls } = mockApi({
+      'GET /api/v1/auth/me': me,
+      'GET /api/v1/auth/sessions': sessions,
+      'DELETE /api/v1/auth/sessions/s2': {},
+      'POST /api/v1/auth/sessions/revoke-others': { revoked: 1 },
+    });
+
+    renderApp(<AccountPage />, '/account');
+
+    expect(await screen.findByText('203.0.113.7')).toBeInTheDocument();
+    expect(screen.getByText('this one')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('End the session from 198.51.100.4'));
+    expect(calls.some((c) => c.key === 'DELETE /api/v1/auth/sessions/s2')).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out everywhere else' }));
+    expect(await screen.findByText(/Ended 1 other session/)).toBeInTheDocument();
   });
 });
