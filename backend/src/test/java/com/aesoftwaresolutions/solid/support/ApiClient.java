@@ -55,6 +55,21 @@ public class ApiClient {
         return this;
     }
 
+    /**
+     * Signs in a user who already exists — the case an invited person is in (spec 046). A brand-new invited
+     * account has no MFA yet, so this enrols it the way the real screens would.
+     */
+    public ApiClient loginExisting(String existingEmail, String password) {
+        this.email = existingEmail;
+        this.token = post("/api/v1/auth/login", Map.of("email", existingEmail, "password", password),
+                HttpStatus.OK).get("token").asText();
+        this.mfaSecret = Base32.decode(post("/api/v1/auth/mfa/enroll", Map.of(), HttpStatus.OK)
+                .get("secret").asText());
+        post("/api/v1/auth/mfa/activate", Map.of("code", Totp.codeAt(mfaSecret, Totp.stepAt(Instant.now()))),
+                HttpStatus.OK);
+        return this;
+    }
+
     public String email() {
         return email;
     }

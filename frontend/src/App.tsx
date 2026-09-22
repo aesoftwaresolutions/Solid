@@ -1,6 +1,7 @@
 import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useAuth } from './auth';
 import { Loading } from './components';
+import AcceptInvitationPage from './pages/AcceptInvitationPage';
 import AccountsPage from './pages/AccountsPage';
 import AssetsPage from './pages/AssetsPage';
 import BankPage from './pages/BankPage';
@@ -96,6 +97,15 @@ function Shell() {
 
 export default function App() {
   const { state } = useAuth();
+
+  // An invitation link is for someone with no account yet, so it is reachable before the sign-in gate.
+  if (window.location.pathname === '/accept-invitation') {
+    return (
+      <Routes>
+        <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+      </Routes>
+    );
+  }
 
   if (state.status === 'loading') {
     return (

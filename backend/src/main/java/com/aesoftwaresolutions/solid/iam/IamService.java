@@ -103,6 +103,31 @@ public class IamService {
         });
     }
 
+    /**
+     * Creates an account for an address that was invited, bypassing the closed-sign-up check — that is what
+     * an invitation is for. Everything else is the same as signing up, including the password rules, and the
+     * new account is never an instance admin: only the very first account is.
+     */
+    public User createInvitedUser(String email, String password, String displayName, String ip) {
+        String normalized = normalizeEmail(email);
+        validatePassword(password);
+        if (displayName == null || displayName.trim().isEmpty()) {
+            throw new ApiProblemException(400, "DISPLAY_NAME_REQUIRED", "A name is required");
+        }
+        boolean taken = db.sql("select exists (select 1 from iam.user_account where email = ?)")
+                .param(normalized).query(Boolean.class).single();
+        if (taken) {
+            throw new ApiProblemException(409, "EMAIL_TAKEN", "An account with this email already exists");
+        }
+        UUID id = Ids.newId();
+        db.sql("""
+                insert into iam.user_account (id, email, display_name, password_hash, is_instance_admin)
+                values (?, ?, ?, ?, false)""")
+                .params(id, normalized, displayName.trim(), passwords.encode(password)).update();
+        audit.record(new AuditLog.Actor(id, ip), null, "signup", "user", id, Map.of("invited", true));
+        return findUser(id).orElseThrow();
+    }
+
     // ---------------- login ----------------
 
     public LoginResult login(String email, String password, String ip, String userAgent) {

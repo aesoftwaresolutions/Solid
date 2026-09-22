@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ApiError, api, type AuditEvent } from '../api';
+import { ApiError, api, type AuditEvent, type Invitation } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
 
 const ROLES: { value: string; what: string }[] = [
@@ -30,6 +30,7 @@ export default function OrganizationPage() {
   const [limit, setLimit] = useState(50);
   const members = useLoader(() => api.members(orgId), [orgId]);
   const events = useLoader(() => api.auditEvents(orgId, limit), [orgId, limit]);
+  const invitations = useLoader(() => api.invitations(orgId), [orgId]);
 
   return (
     <main>
@@ -62,6 +63,49 @@ export default function OrganizationPage() {
           </table>
         )}
         {members.value && <AddMember orgId={orgId} onAdded={members.reload} />}
+      </Card>
+
+      <Card title="Invitations">
+        <Denied error={invitations.error} what="invitations" />
+        <p className="muted">
+          Sign-up is closed on a server of your own, so this is how someone else gets an account. Solid does
+          not send the email: copy the link and send it however you already talk to that person. It works
+          once, for that address, and stops working after seven days.
+        </p>
+        <Invite orgId={orgId} onInvited={invitations.reload} />
+        {invitations.value && invitations.value.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Expires</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {invitations.value.map((invitation: Invitation) => (
+                <tr key={invitation.id}>
+                  <td>{invitation.email}</td>
+                  <td>{invitation.role}</td>
+                  <td>{invitation.status}</td>
+                  <td className="muted">{invitation.expiresAt?.slice(0, 10)}</td>
+                  <td>
+                    {invitation.status === 'pending' && (
+                      <button
+                        type="button"
+                        onClick={() => api.revokeInvitation(orgId, invitation.id).then(invitations.reload)}
+                      >
+                        Withdraw
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Card>
 
       <Card title="Activity">
@@ -104,6 +148,61 @@ export default function OrganizationPage() {
         )}
       </Card>
     </main>
+  );
+}
+
+function Invite({ orgId, onInvited }: { orgId: string; onInvited: () => void }) {
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('bookkeeper');
+  const [link, setLink] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          setBusy(true);
+          setError(undefined);
+          setLink(null);
+          api
+            .invite(orgId, email.trim(), role)
+            .then((invitation) => {
+              setLink(`${window.location.origin}/accept-invitation?token=${encodeURIComponent(invitation.token ?? '')}`);
+              setEmail('');
+              onInvited();
+            })
+            .catch(setError)
+            .finally(() => setBusy(false));
+        }}
+      >
+        <label>
+          Email to invite
+          <input type="email" value={email} required onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <label>
+          Role for the invitation
+          <select value={role} onChange={(e) => setRole(e.target.value)}>
+            {ROLES.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.value} — {r.what}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" disabled={busy}>
+          Create invitation
+        </button>
+      </form>
+      <ErrorMessage error={error} />
+      {link && (
+        <p role="status">
+          Copy this link now — it is shown once and cannot be looked up again:{' '}
+          <input readOnly value={link} aria-label="Invitation link" size={60} onFocus={(e) => e.target.select()} />
+        </p>
+      )}
+    </>
   );
 }
 

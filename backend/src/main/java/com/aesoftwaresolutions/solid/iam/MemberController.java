@@ -27,10 +27,12 @@ class MemberController {
     }
 
     private final MembershipService memberships;
+    private final InvitationService invitations;
     private final AuditLog audit;
 
-    MemberController(MembershipService memberships, AuditLog audit) {
+    MemberController(MembershipService memberships, InvitationService invitations, AuditLog audit) {
         this.memberships = memberships;
+        this.invitations = invitations;
         this.audit = audit;
     }
 
@@ -47,6 +49,35 @@ class MemberController {
             throw new ForbiddenException("Only owners can add owners");
         }
         return memberships.addMember(orgId, body.email(), body.role());
+    }
+
+    record InviteRequest(@NotBlank @jakarta.validation.constraints.Email String email, @NotNull Role role) {
+    }
+
+    /** The token is in this response and nowhere else — there is no way to read it again. */
+    @PostMapping("/invitations")
+    @ResponseStatus(HttpStatus.CREATED)
+    InvitationService.Invitation invite(@PathVariable UUID orgId, @Valid @RequestBody InviteRequest body,
+                                        HttpServletRequest request) {
+        requireManager(request);
+        if (body.role() == Role.owner && request.getAttribute(OrgAccessInterceptor.ROLE_ATTRIBUTE) != Role.owner) {
+            throw new ForbiddenException("Only owners can invite owners");
+        }
+        return invitations.invite(orgId, body.email(), body.role(), CurrentUser.require().userId(),
+                ClientIp.of(request));
+    }
+
+    @GetMapping("/invitations")
+    List<InvitationService.Invitation> listInvitations(@PathVariable UUID orgId, HttpServletRequest request) {
+        requireManager(request);
+        return invitations.list(orgId);
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/invitations/{invitationId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void revokeInvitation(@PathVariable UUID orgId, @PathVariable UUID invitationId, HttpServletRequest request) {
+        requireManager(request);
+        invitations.revoke(orgId, invitationId, CurrentUser.require().userId(), ClientIp.of(request));
     }
 
     @GetMapping("/audit-events")

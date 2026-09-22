@@ -33,10 +33,27 @@ class AuthController {
 
     private final IamService iam;
     private final MembershipService memberships;
+    private final InvitationService invitations;
 
-    AuthController(IamService iam, MembershipService memberships) {
+    AuthController(IamService iam, MembershipService memberships, InvitationService invitations) {
+        this.invitations = invitations;
         this.iam = iam;
         this.memberships = memberships;
+    }
+
+    record AcceptInvitationRequest(@NotBlank String token, @NotBlank String displayName,
+                                   @NotBlank String password) {
+    }
+
+    /**
+     * Accepting an invitation is unauthenticated on purpose: the person has no account yet. The token is the
+     * only credential, and it decides which address and which organization — nothing here is taken on trust
+     * from the request.
+     */
+    @PostMapping("/accept-invitation")
+    InvitationService.Acceptance acceptInvitation(@Valid @RequestBody AcceptInvitationRequest body,
+                                                  HttpServletRequest request) {
+        return invitations.accept(body.token(), body.displayName(), body.password(), ClientIp.of(request));
     }
 
     @PostMapping("/signup")

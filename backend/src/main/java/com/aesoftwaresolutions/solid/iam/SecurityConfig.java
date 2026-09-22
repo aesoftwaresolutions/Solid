@@ -48,7 +48,9 @@ class SecurityConfig {
                 .logout(l -> l.disable())
                 .addFilterBefore(new SessionAuthenticationFilter(iam), AnonymousAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/signup", "/api/v1/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/signup", "/api/v1/auth/login",
+                                // Accepting an invitation is how someone without an account gets one.
+                                "/api/v1/auth/accept-invitation").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/system/info").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/health", "/error").permitAll()
                         .requestMatchers("/api/v1/auth/mfa/**", "/api/v1/auth/logout", "/api/v1/auth/me")

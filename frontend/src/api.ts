@@ -569,6 +569,19 @@ export interface CashFlow {
 }
 
 /** An API error carrying the server's problem-details code so screens can react to specific cases. */
+export interface Invitation {
+  id: string;
+  orgId: string;
+  email: string;
+  role: string;
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  invitedBy: string | null;
+  createdAt: string;
+  expiresAt: string;
+  /** Present only on the response that created it — there is no way to read it again. */
+  token: string | null;
+}
+
 export interface SetupStep {
   key: string;
   title: string;
@@ -1089,6 +1102,17 @@ export const api = {
     request<{ valid: boolean; postedEntries: number; firstInvalidSeq: number | null }>(
       `/orgs/${orgId}/entities/${entityId}/journal/verify`,
     ),
+  invitations: (orgId: string) => request<Invitation[]>(`/orgs/${orgId}/invitations`),
+  invite: (orgId: string, email: string, role: string) =>
+    request<Invitation>(`/orgs/${orgId}/invitations`, { method: 'POST', ...json({ email, role }) }),
+  revokeInvitation: (orgId: string, invitationId: string) =>
+    request<void>(`/orgs/${orgId}/invitations/${invitationId}`, { method: 'DELETE' }),
+  acceptInvitation: (token: string, displayName: string, password: string) =>
+    request<{ organizationId: string; email: string; created: boolean }>('/auth/accept-invitation', {
+      method: 'POST',
+      ...json({ token, displayName, password }),
+    }),
+
   setup: (orgId: string, entityId: string) =>
     request<Setup>(`/orgs/${orgId}/entities/${entityId}/setup`),
   updateEntity: (orgId: string, entityId: string, patch: { legalName?: string; accountingMethod?: string; homeState?: string }) =>

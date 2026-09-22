@@ -46,6 +46,7 @@ describe('spec 025: people and activity', () => {
     const { calls } = mockApi({
       [`GET ${base}/members`]: () => current,
       [`GET ${base}/audit-events`]: events,
+      [`GET ${base}/invitations`]: [],
       [`POST ${base}/members`]: () => {
         current = [...current, { userId: 'u3', email: 'cpa@example.test', displayName: 'CPA', role: 'accountant' }];
         return current[current.length - 1];
@@ -79,6 +80,7 @@ describe('spec 025: people and activity', () => {
     const { calls } = mockApi({
       [`GET ${base}/members`]: members,
       [`GET ${base}/audit-events`]: events,
+      [`GET ${base}/invitations`]: [],
     });
 
     renderPage();
@@ -95,8 +97,15 @@ describe('spec 025: people and activity', () => {
       {
         [`GET ${base}/members`]: { detail: 'Only owners and admins can do this', status: 403 },
         [`GET ${base}/audit-events`]: { detail: 'Only owners and admins can do this', status: 403 },
+        [`GET ${base}/invitations`]: { detail: 'Only owners and admins can do this', status: 403 },
       },
-      { status: { [`GET ${base}/members`]: 403, [`GET ${base}/audit-events`]: 403 } },
+      {
+        status: {
+          [`GET ${base}/members`]: 403,
+          [`GET ${base}/audit-events`]: 403,
+          [`GET ${base}/invitations`]: 403,
+        },
+      },
     );
 
     renderPage();
@@ -112,6 +121,7 @@ describe('spec 025: people and activity', () => {
       {
         [`GET ${base}/members`]: members,
         [`GET ${base}/audit-events`]: events,
+      [`GET ${base}/invitations`]: [],
         [`POST ${base}/members`]: { detail: 'Only owners can add owners', status: 403 },
       },
       { status: { [`POST ${base}/members`]: 403 } },

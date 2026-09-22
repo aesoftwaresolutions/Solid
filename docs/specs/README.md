@@ -49,5 +49,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 043 | Fixes from the second review | [043](043-second-review-fixes.md) | Done (security review) | 034-042 |
 | 044 | The first ten minutes (getting started) | [044](044-getting-started.md) | Done (owner review) | 003, 005, 008, 028 |
 | 045 | Proving the packaged stack runs | [045](045-proving-the-stack-runs.md) | Done (owner review) | 001, 018 |
+| 046 | Inviting the second person | [046](046-invitations.md) | Done (owner + security review) | 007, 025 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

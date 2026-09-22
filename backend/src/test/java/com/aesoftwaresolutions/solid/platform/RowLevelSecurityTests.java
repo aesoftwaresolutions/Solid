@@ -28,6 +28,9 @@ class RowLevelSecurityTests {
             "iam.session",           // identity spans organizations
             "iam.mfa_recovery_code", // identity spans organizations
             "iam.membership",        // needed to decide org access before an org scope exists
+            // Read while nobody is signed in (accepting an invitation is how an outsider gets an account),
+            // so no org scope exists yet; the token's hash is the only key to a row (spec 046).
+            "iam.invitation",
             "audit.event",           // instance-wide chain; app role has INSERT/SELECT only, filtered by org in queries
             "sys.instance"           // one row describing the installation itself; holds no customer data (spec 018)
     );
