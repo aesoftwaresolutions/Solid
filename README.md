@@ -33,10 +33,17 @@ history, each with its acceptance criteria.
 
 ## Running it
 
+On a server, for a household, a business or a firm with several people:
+
 ```bash
 cp .env.example .env          # then set SOLID_MASTER_KEY (openssl rand -base64 32)
 docker compose up --build     # http://localhost:8080
 ```
+
+On one computer, for one person, there is an installer instead — a `.msi`, `.dmg` or `.deb` that carries its
+own Java and its own PostgreSQL, needs neither installed, and listens only to that machine. Build it with
+`ops/desktop/build.sh` (or `build.ps1` on Windows), or run the **Desktop installers** workflow.
+**[docs/desktop.md](docs/desktop.md)** covers both.
 
 The first account created becomes the instance administrator. Read **[docs/operations.md](docs/operations.md)**
 before you put real books in it — especially the part about keeping `SOLID_MASTER_KEY` somewhere other than your

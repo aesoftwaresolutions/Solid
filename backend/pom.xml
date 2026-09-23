@@ -24,6 +24,10 @@
     <bouncycastle.version>1.86</bouncycastle.version>
     <springdoc.version>2.8.13</springdoc.version>
     <pdfbox.version>3.0.5</pdfbox.version>
+    <!-- Bundled PostgreSQL for the desktop build (spec 060). Wrapper: Apache-2.0; the server binaries it
+         starts are under the PostgreSQL Licence. Both are permissive. -->
+    <embedded-postgres.version>2.1.0</embedded-postgres.version>
+    <embedded-postgres-binaries.version>16.2.0</embedded-postgres-binaries.version>
   </properties>
 
   <dependencyManagement>
@@ -85,6 +89,19 @@
       <artifactId>spring-modulith-starter-core</artifactId>
     </dependency>
     <dependency>
+      <!-- Starts a real PostgreSQL for the desktop build. The platform's server binaries are added by one of
+           the desktop-* profiles below, so a server build carries only this small wrapper. -->
+      <groupId>io.zonky.test</groupId>
+      <artifactId>embedded-postgres</artifactId>
+      <version>${embedded-postgres.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>io.zonky.test.postgres</groupId>
+          <artifactId>embedded-postgres-binaries-linux-amd64</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
     </dependency>
@@ -114,6 +131,14 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- So DesktopModeTests can start the bundled PostgreSQL the way an installed copy does. Test scope:
+           a server build ships none of this. -->
+      <groupId>io.zonky.test.postgres</groupId>
+      <artifactId>embedded-postgres-binaries-linux-amd64</artifactId>
+      <version>${embedded-postgres-binaries.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -150,6 +175,80 @@
   </build>
 
   <profiles>
+    <!-- Any desktop build (-Ddesktop.os=...) also serves the web UI from inside the jar, because there is no
+         Caddy on a laptop. The frontend must have been built first: ops/desktop/build.sh does that. -->
+    <profile>
+      <id>desktop</id>
+      <activation><property><name>desktop.os</name></property></activation>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-resources-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>copy-web-ui</id>
+                <phase>prepare-package</phase>
+                <goals><goal>copy-resources</goal></goals>
+                <configuration>
+                  <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
+                  <resources>
+                    <resource><directory>${project.basedir}/../frontend/dist</directory></resource>
+                  </resources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!-- The bundled PostgreSQL binaries for one platform. The desktop build passes -Ddesktop.os=..., so a
+         server build has none of them and stays small. -->
+    <profile>
+      <id>desktop-linux</id>
+      <activation><property><name>desktop.os</name><value>linux</value></property></activation>
+      <dependencies>
+        <dependency>
+          <groupId>io.zonky.test.postgres</groupId>
+          <artifactId>embedded-postgres-binaries-linux-amd64</artifactId>
+          <version>${embedded-postgres-binaries.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>desktop-windows</id>
+      <activation><property><name>desktop.os</name><value>windows</value></property></activation>
+      <dependencies>
+        <dependency>
+          <groupId>io.zonky.test.postgres</groupId>
+          <artifactId>embedded-postgres-binaries-windows-amd64</artifactId>
+          <version>${embedded-postgres-binaries.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>desktop-macos</id>
+      <activation><property><name>desktop.os</name><value>macos</value></property></activation>
+      <dependencies>
+        <dependency>
+          <groupId>io.zonky.test.postgres</groupId>
+          <artifactId>embedded-postgres-binaries-darwin-amd64</artifactId>
+          <version>${embedded-postgres-binaries.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>desktop-macos-arm</id>
+      <activation><property><name>desktop.os</name><value>macos-arm</value></property></activation>
+      <dependencies>
+        <dependency>
+          <groupId>io.zonky.test.postgres</groupId>
+          <artifactId>embedded-postgres-binaries-darwin-arm64v8</artifactId>
+          <version>${embedded-postgres-binaries.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+
     <!-- mvn -Plicense-check verify : fails the build if a GPL/AGPL dependency is present -->
     <profile>
       <id>license-check</id>

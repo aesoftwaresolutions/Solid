@@ -1,0 +1,114 @@
+name: Desktop installers
+
+# Builds the double-click installers (spec 060). jpackage cannot cross-build, so each one is built on its own
+# runner: Windows makes the .msi, macOS the .dmg, Linux the .deb.
+#
+# Run it by hand from the Actions tab, or let a version tag do it. The installers appear as artifacts on the
+# run, and on a tag they are attached to the release.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            desktop_os: windows
+            type: msi
+          - os: macos-latest
+            desktop_os: macos-arm
+            type: dmg
+          - os: ubuntu-latest
+            desktop_os: linux
+            type: deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build the web UI
+        working-directory: frontend
+        run: npm ci && npm run build
+
+      - name: Build the application with PostgreSQL bundled for ${{ matrix.desktop_os }}
+        working-directory: backend
+        shell: bash
+        run: chmod +x mvnw && ./mvnw -B -DskipTests -Ddesktop.os=${{ matrix.desktop_os }} package
+
+      - name: Stage the jar for jpackage
+        shell: bash
+        run: |
+          mkdir -p backend/target/jpackage-input
+          cp "$(ls backend/target/solid-*.jar | grep -v original | head -1)" \
+             backend/target/jpackage-input/solid.jar
+
+      # Built and started before packaging, so a broken desktop build fails here rather than on someone's
+      # laptop. Every platform gets this check, including the two the test suite cannot cover.
+      - name: Check the desktop build actually starts on this platform
+        shell: bash
+        run: |
+          set -e
+          HOME_DIR="$(mktemp -d)/solid"
+          java -Dspring.profiles.active=desktop \
+               -Dsolid.desktop.home="$HOME_DIR" \
+               -Dsolid.desktop.port=18080 \
+               -Dsolid.desktop.open-browser=false \
+               -jar backend/target/jpackage-input/solid.jar > desktop-start.log 2>&1 &
+          APP_PID=$!
+          for i in $(seq 1 60); do
+            sleep 3
+            if curl -fsS -o /dev/null http://127.0.0.1:18080/ ; then READY=1; break; fi
+          done
+          if [ "${READY:-0}" != "1" ]; then echo "--- it never came up:"; cat desktop-start.log; exit 1; fi
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/v1/orgs)" = "401"
+          test -f "$HOME_DIR/master.key"
+          python3 ops/smoke-test.py http://127.0.0.1:18080
+          kill $APP_PID
+
+      - name: Package the installer
+        shell: bash
+        run: |
+          VERSION="$(sed -n 's/.*<version>\(.*\)<\/version>.*/\1/p' backend/pom.xml | head -2 | tail -1)"
+          VERSION="${VERSION%-SNAPSHOT}"
+          EXTRA=""
+          case "${{ matrix.type }}" in
+            msi) EXTRA="--win-dir-chooser --win-menu --win-menu-group Solid --win-shortcut" ;;
+            deb) EXTRA="--linux-shortcut --linux-menu-group Office" ;;
+            dmg) EXTRA="--mac-package-name Solid" ;;
+          esac
+          jpackage --name Solid --app-version "$VERSION" \
+            --vendor "AE Software Solutions" \
+            --description "Business and personal accounting with US tax" \
+            --input backend/target/jpackage-input \
+            --main-jar solid.jar \
+            --main-class org.springframework.boot.loader.launch.JarLauncher \
+            --java-options "-Dspring.profiles.active=desktop" \
+            --java-options "-Xmx1g" \
+            --dest backend/target/installer \
+            --type ${{ matrix.type }} $EXTRA
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: solid-${{ matrix.desktop_os }}
+          path: backend/target/installer/*
+
+      # Unsigned: macOS and Windows will warn the person installing until the owner's certificates are added.
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: backend/target/installer/*

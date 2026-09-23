@@ -18,8 +18,15 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 @Configuration(proxyBeanMethods = false)
 class SecurityConfig {
 
+    /**
+     * Paths that may be fetched without signing in. Empty on a server, where a web server serves the UI; the
+     * desktop build contributes the UI's own files, because there the application serves them itself
+     * (spec 060). Nothing here is data: these are the HTML, JavaScript and CSS of the login screen.
+     */
     @Bean
-    SecurityFilterChain api(HttpSecurity http, IamService iam, ObjectMapper mapper) throws Exception {
+    SecurityFilterChain api(HttpSecurity http, IamService iam, ObjectMapper mapper,
+                            @org.springframework.beans.factory.annotation.Qualifier("publicUiMatcher")
+                            java.util.Optional<RequestMatcher> publicUi) throws Exception {
         CsrfTokenRequestAttributeHandler csrfHandler = new CsrfTokenRequestAttributeHandler();
         csrfHandler.setCsrfRequestAttributeName(null); // always load token so the XSRF-TOKEN cookie is issued
 
@@ -48,6 +55,8 @@ class SecurityConfig {
                 .logout(l -> l.disable())
                 .addFilterBefore(new SessionAuthenticationFilter(iam), AnonymousAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(request -> publicUi.map(m -> m.matches(request)).orElse(false))
+                        .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/signup", "/api/v1/auth/login",
                                 // Accepting an invitation is how someone without an account gets one.
                                 "/api/v1/auth/accept-invitation",

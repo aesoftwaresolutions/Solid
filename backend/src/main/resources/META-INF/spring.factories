@@ -1,0 +1,4 @@
+# Runs before any bean exists, because the bundled database must be listening before Spring builds a
+# connection pool. It returns immediately unless the desktop profile is active.
+org.springframework.boot.env.EnvironmentPostProcessor=\
+  com.aesoftwaresolutions.solid.desktop.DesktopSetup
