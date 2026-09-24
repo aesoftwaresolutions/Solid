@@ -67,5 +67,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 061 | Making the first account | [061](061-first-account.md) | Done (owner review) | 007, 011, 060 |
 | 062 | Forms that line up | [062](062-forms-that-line-up.md) | Done (owner review) | 011, 061 |
 | 063 | A window of its own | [063](063-a-window-of-its-own.md) | Done (owner review) | 060 |
+| 064 | Closed means closed | [064](064-closed-means-closed.md) | Done (owner review) | 063 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

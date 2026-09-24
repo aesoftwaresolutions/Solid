@@ -14,6 +14,8 @@ import org.junit.jupiter.api.io.TempDir;
  *
  * <p>The dangerous half of this is the restraint: a pid file is just a number, and by the time Solid reads it
  * that number may belong to anything at all. These tests are mostly about what must <em>not</em> be killed.
+ *
+ * <p>Spec 064 moved this to the one way down, used both on the way out and on the way in.
  */
 class DesktopDatabaseTakeoverTests {
 
@@ -27,7 +29,7 @@ class DesktopDatabaseTakeoverTests {
         long me = ProcessHandle.current().pid();
         Files.writeString(dataDir.resolve("postmaster.pid"), me + "\n" + dataDir + "\n");
 
-        DesktopSetup.stopAnyServerStillRunning(dataDir);
+        DesktopShutdown.stopAnyServerStillRunning(dataDir);
 
         assertThat(ProcessHandle.current().isAlive()).isTrue();
     }
@@ -39,15 +41,15 @@ class DesktopDatabaseTakeoverTests {
         assertThat(ProcessHandle.of(unused)).as("pick a pid that really is free").isEmpty();
         Files.writeString(dataDir.resolve("postmaster.pid"), unused + "\n" + dataDir + "\n");
 
-        assertThatCode(() -> DesktopSetup.stopAnyServerStillRunning(dataDir)).doesNotThrowAnyException();
+        assertThatCode(() -> DesktopShutdown.stopAnyServerStillRunning(dataDir)).doesNotThrowAnyException();
     }
 
     @Test
     void aMissingOrUnreadablePidFileIsNotAProblem() throws IOException {
-        assertThatCode(() -> DesktopSetup.stopAnyServerStillRunning(dataDir)).doesNotThrowAnyException();
+        assertThatCode(() -> DesktopShutdown.stopAnyServerStillRunning(dataDir)).doesNotThrowAnyException();
 
         Files.writeString(dataDir.resolve("postmaster.pid"), "this is not a number\n");
-        assertThatCode(() -> DesktopSetup.stopAnyServerStillRunning(dataDir))
+        assertThatCode(() -> DesktopShutdown.stopAnyServerStillRunning(dataDir))
                 .as("a damaged pid file is PostgreSQL's business, not a reason to fall over")
                 .doesNotThrowAnyException();
     }

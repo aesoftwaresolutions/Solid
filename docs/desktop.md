@@ -80,6 +80,10 @@ would otherwise provide; no business logic knows the difference.
 - **The database stops when Solid does**, and a data directory still held by a copy that was killed outright
   is taken over — that server is stopped first. Otherwise its files stay locked and the next upgrade fails,
   which is exactly what happened once before spec 063.
+- **Quitting any way at all closes everything** (spec 064): the window goes down with the application, the
+  database is checked rather than trusted to have stopped, and a shutdown that jams is cut short after 25
+  seconds. A copy ended with Task Manager still orphans its database — no program can run code after being
+  killed — which is what the takeover above is for.
 
 ## What it does not do yet
 

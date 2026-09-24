@@ -72,6 +72,9 @@ final class DesktopWindow {
             Process window = new ProcessBuilder(command).redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
             log.info("Solid is open in its own window ({})", browser.getFileName());
+            // So that quitting any other way — a crash, Ctrl+C, signing out — takes the window with it
+            // rather than leaving it in front of a server that has gone (spec 064).
+            DesktopShutdown.remember(window);
 
             // Closing the window puts Solid away, which is what a person expects of an application.
             Thread watcher = new Thread(() -> {
