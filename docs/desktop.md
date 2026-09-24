@@ -13,8 +13,16 @@ Download the file for their computer and open it:
 | macOS | `Solid-<version>.dmg` | Drag Solid to Applications |
 | Linux | `solid_<version>_amd64.deb` | `sudo apt install ./solid_<version>_amd64.deb` |
 
-Opening Solid starts everything and opens the books in their browser at `http://127.0.0.1:18080`. There is no
-Java to install, no database to set up and no configuration file.
+Opening Solid starts everything and opens **its own window** — no address bar, no tab among forty others.
+Closing that window puts Solid away, database and all. There is no Java to install, no database to set up and
+no configuration file.
+
+The window is drawn by a browser the machine already has (Edge on Windows, Chrome, Chromium, Brave) running
+chromeless against a profile of Solid's own, so it carries none of the person's extensions or sign-ins. No
+browser engine is bundled: JavaFX's WebView is GPL and this project takes only permissive dependencies, and
+embedding Chromium would add a hundred megabytes for a window that would look no different. Where no such
+browser exists, Solid opens the default browser at `http://127.0.0.1:18080` and says so. `solid.desktop.window`
+is `auto`, `browser` or `none`.
 
 **There is no default password.** A fresh install has no accounts, so the first screen offers to create one:
 that account is the administrator, and two-factor authentication is set up immediately afterwards — on a
@@ -69,9 +77,12 @@ would otherwise provide; no business logic knows the difference.
   signing in; every `/api/**` path is exactly as protected as on a server.
 - **One copy at a time.** A second start says so and stops, rather than letting two servers share one data
   directory.
+- **The database stops when Solid does**, and a data directory still held by a copy that was killed outright
+  is taken over — that server is stopped first. Otherwise its files stay locked and the next upgrade fails,
+  which is exactly what happened once before spec 063.
 
 ## What it does not do yet
 
-It opens the browser rather than a window of its own. The installers are unsigned, so Windows and macOS will
+The installers are unsigned, so Windows and macOS will
 warn until the owner's certificates are added. There is no auto-update: installing a newer version over the
 old one migrates the existing folder, as a server upgrade does.

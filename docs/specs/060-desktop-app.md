@@ -56,5 +56,5 @@ makes a **double-click installer**: one file, no server, no terminal, no Docker.
 7. A second instance refuses to start and says the app is already running.
 
 ## Out of scope
-A native window (it opens the browser — a window is a later slice), code signing and notarisation (they need
+Code signing and notarisation (they need
 the owner's certificates), auto-update, and multi-user access to a desktop install.

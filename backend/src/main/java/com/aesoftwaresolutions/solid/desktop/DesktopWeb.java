@@ -1,6 +1,5 @@
 package com.aesoftwaresolutions.solid.desktop;
 
-import java.awt.Desktop;
 import java.net.URI;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,10 +22,15 @@ class DesktopWeb implements WebMvcConfigurer {
 
     private static final Logger log = LoggerFactory.getLogger(DesktopWeb.class);
 
-    private final boolean openBrowser;
+    private final String windowMode;
+    private final org.springframework.context.ConfigurableApplicationContext context;
 
-    DesktopWeb(@Value("${solid.desktop.open-browser:true}") boolean openBrowser) {
-        this.openBrowser = openBrowser;
+    DesktopWeb(@Value("${solid.desktop.window:auto}") String windowMode,
+               @Value("${solid.desktop.open-browser:true}") boolean openBrowser,
+               org.springframework.context.ConfigurableApplicationContext context) {
+        // open-browser=false predates the window and still means "open nothing" (spec 063).
+        this.windowMode = openBrowser ? windowMode : "none";
+        this.context = context;
     }
 
     /**
@@ -50,27 +54,7 @@ class DesktopWeb implements WebMvcConfigurer {
         int port = event.getApplicationContext() instanceof WebServerApplicationContext web
                 && web.getWebServer() != null ? web.getWebServer().getPort() : DesktopSetup.PORT;
         URI url = URI.create("http://127.0.0.1:" + port + "/");
-        log.info("Solid is running at {}", url);
-        if (!openBrowser) {
-            return;
-        }
-        try {
-            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-                Desktop.getDesktop().browse(url);
-                return;
-            }
-        } catch (Exception e) {
-            log.debug("Could not open the browser through the desktop API", e);
-        }
-        // Headless Linux desktops often have no AWT Desktop; xdg-open is the usual way in.
-        for (String opener : new String[]{"xdg-open", "open"}) {
-            try {
-                new ProcessBuilder(opener, url.toString()).start();
-                return;
-            } catch (Exception e) {
-                log.debug("{} did not work", opener, e);
-            }
-        }
-        log.info("Open {} in your browser to use Solid.", url);
+        DesktopWindow.open(context, DesktopSetup.appDir(event.getApplicationContext().getEnvironment()), url,
+                windowMode);
     }
 }
