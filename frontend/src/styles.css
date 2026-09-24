@@ -51,6 +51,11 @@ h2 {
   margin: 0;
 }
 
+/* A heading inside a card needs air under it, or the first field looks stuck to it. */
+.card > h2 {
+  margin-bottom: 12px;
+}
+
 .card {
   background: white;
   border: 1px solid var(--line);
@@ -90,17 +95,48 @@ td.money {
 
 label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+/*
+  The control sits on its own line under the words that name it. Left to itself an input is inline, so it
+  ran on immediately after the label text with nothing between them, and every field started at a different
+  place depending on how long its label happened to be. On its own line they all line up.
+*/
+label > input:not([type="checkbox"]):not([type="radio"]),
+label > select,
+label > textarea {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin-top: 4px;
+}
+
+/* A tick box is different: it belongs beside its words, not above them. */
+label > input[type="checkbox"],
+label > input[type="radio"] {
+  margin-right: 8px;
 }
 
 input,
 select,
+textarea,
 button {
   font: inherit;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
   max-width: 100%;
+}
+
+textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+/* Signing in and setting up are read before they are filled in, so they get a comfortable line length. */
+main.narrow {
+  max-width: 560px;
 }
 
 button {

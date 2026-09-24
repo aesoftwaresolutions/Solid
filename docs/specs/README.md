@@ -65,5 +65,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 059 | Which period a credit belongs to | [059](059-credit-period.md) | Done (owner review; CPA ruling received) | 058 |
 | 060 | Solid on one computer (desktop installer) | [060](060-desktop-app.md) | Done (owner review) | 001, 018 |
 | 061 | Making the first account | [061](061-first-account.md) | Done (owner review) | 007, 011, 060 |
+| 062 | Forms that line up | [062](062-forms-that-line-up.md) | Done (owner review) | 011, 061 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

@@ -60,8 +60,10 @@ export default function LoginPage() {
     event.preventDefault();
     void run(async () => {
       await api.signup(email.trim(), password, displayName.trim());
-      await api.login(email.trim(), password);
+      // The account exists from here on, so this screen must not offer to create it again whatever
+      // happens next: signing in is a separate step and can have its own troubles.
       setSetupNeeded(false);
+      await api.login(email.trim(), password);
       setEnrollment(await api.enrollMfa());
       setStep('enroll');
     });
@@ -90,7 +92,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main>
+    <main className="narrow">
       <h1>{setupNeeded === true && step === 'credentials' ? 'Set up Solid' : 'Sign in to Solid'}</h1>
       <ErrorMessage error={error} />
 
