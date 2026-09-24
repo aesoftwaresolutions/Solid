@@ -62,7 +62,9 @@ class SecurityConfig {
                                 "/api/v1/auth/accept-invitation",
                                 // Spending a reset token: the person cannot sign in, which is the point.
                                 "/api/v1/auth/reset-password").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/system/info").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/system/info",
+                                // The first screen has to know whether anyone has claimed this instance yet.
+                                "/api/v1/auth/setup-state").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/health", "/error").permitAll()
                         .requestMatchers("/api/v1/auth/mfa/**", "/api/v1/auth/logout", "/api/v1/auth/me")
                         .hasAnyAuthority("USER", "MFA_PENDING")

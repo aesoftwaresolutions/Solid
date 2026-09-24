@@ -14,8 +14,11 @@ Download the file for their computer and open it:
 | Linux | `solid_<version>_amd64.deb` | `sudo apt install ./solid_<version>_amd64.deb` |
 
 Opening Solid starts everything and opens the books in their browser at `http://127.0.0.1:18080`. There is no
-Java to install, no database to set up and no configuration file. The first person to sign up becomes the
-administrator, and two-factor authentication is set up then — on a laptop as on a server.
+Java to install, no database to set up and no configuration file.
+
+**There is no default password.** A fresh install has no accounts, so the first screen offers to create one:
+that account is the administrator, and two-factor authentication is set up immediately afterwards — on a
+laptop as on a server. A shipped default credential is a shipped vulnerability, so Solid does not have one.
 
 **The one thing to tell them:** everything is in a single folder, and that folder is the backup.
 

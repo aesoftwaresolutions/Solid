@@ -168,3 +168,50 @@ describe('money formatting', () => {
     expect(formatMoney(undefined)).toBe('');
   });
 });
+
+describe('spec 061: making the first account', () => {
+  test('an unclaimed instance offers to make the administrator account, then goes on to two-factor', async () => {
+    const user = userEvent.setup();
+    const { calls } = mockApi({
+      'GET /api/v1/auth/me': { detail: 'Please log in', status: 401, code: 'UNAUTHENTICATED' },
+      'GET /api/v1/auth/setup-state': { setupNeeded: true },
+      'POST /api/v1/auth/signup': { id: 'u1', email: 'owner@example.test', displayName: 'The Owner' },
+      'POST /api/v1/auth/login': { mfaEnrolled: false },
+      'POST /api/v1/auth/mfa/enroll': { secret: 'JBSWY3DPEHPK3PXP', otpauthUri: 'otpauth://totp/Solid' },
+    }, { status: { 'GET /api/v1/auth/me': 401, 'POST /api/v1/auth/signup': 201 } });
+
+    renderApp();
+
+    expect(await screen.findByRole('heading', { name: 'Create the first account' })).toBeInTheDocument();
+    // AC4: it says what this account is and what the password has to be, before anything is typed.
+    expect(screen.getByText(/administrator/)).toBeInTheDocument();
+    expect(screen.getByText(/At least 12 characters/)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Your name'), 'The Owner');
+    await user.type(screen.getByLabelText('Email'), 'owner@example.test');
+    await user.type(screen.getByLabelText('Password'), 'correct horse battery staple');
+    await user.click(screen.getByRole('button', { name: 'Create the account' }));
+
+    // AC3: created, signed in, and straight on to two-factor setup.
+    expect(await screen.findByText('JBSWY3DPEHPK3PXP')).toBeInTheDocument();
+    expect(calls.find((c) => c.key === 'POST /api/v1/auth/signup')?.body).toMatchObject({
+      email: 'owner@example.test',
+      displayName: 'The Owner',
+    });
+    expect(calls.some((c) => c.key === 'POST /api/v1/auth/login')).toBe(true);
+  });
+
+  test('an instance that already has accounts shows the ordinary sign-in form', async () => {
+    mockApi({
+      'GET /api/v1/auth/me': { detail: 'Please log in', status: 401, code: 'UNAUTHENTICATED' },
+      'GET /api/v1/auth/setup-state': { setupNeeded: false },
+    }, { status: { 'GET /api/v1/auth/me': 401 } });
+
+    renderApp();
+
+    expect(await screen.findByRole('heading', { name: 'Sign in to Solid' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Create the first account' })).not.toBeInTheDocument(),
+    );
+  });
+});

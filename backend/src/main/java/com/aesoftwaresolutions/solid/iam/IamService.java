@@ -78,6 +78,17 @@ public class IamService {
 
     // ---------------- sign-up ----------------
 
+    /**
+     * Whether this instance has no accounts at all, so the next person to sign up becomes its administrator.
+     *
+     * <p>Readable without signing in, because the person who needs it has no account yet. It says nothing but
+     * yes or no: no counts, no names. An unclaimed instance already accepts that first signup — this only
+     * makes the fact visible instead of leaving someone staring at a sign-in form they cannot pass (spec 061).
+     */
+    public boolean setupNeeded() {
+        return db.sql("select count(*) from iam.user_account").query(Long.class).single() == 0;
+    }
+
     public User signup(String email, String password, String displayName, String ip) {
         String normalized = normalizeEmail(email);
         validatePassword(password);

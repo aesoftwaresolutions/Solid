@@ -1,9 +1,12 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../api';
 import { useAuth } from '../auth';
 import { ErrorMessage } from '../components';
 
 type Step = 'credentials' | 'enroll' | 'recoveryCodes' | 'verify';
+
+/** Long enough to matter, and the server enforces the same: see IamService.validatePassword. */
+const MIN_PASSWORD = 12;
 
 export default function LoginPage() {
   const { refresh } = useAuth();
@@ -16,6 +19,16 @@ export default function LoginPage() {
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
+  // undefined until the server has told us; there is no point guessing.
+  const [setupNeeded, setSetupNeeded] = useState<boolean | undefined>(undefined);
+  const [displayName, setDisplayName] = useState('');
+
+  useEffect(() => {
+    api
+      .setupState()
+      .then((state) => setSetupNeeded(state.setupNeeded))
+      .catch(() => setSetupNeeded(false));
+  }, []);
 
   async function run(work: () => Promise<void>) {
     setBusy(true);
@@ -39,6 +52,18 @@ export default function LoginPage() {
         setEnrollment(await api.enrollMfa());
         setStep('enroll');
       }
+    });
+  };
+
+  /** Makes the first account and carries straight on into two-factor setup. */
+  const submitFirstAccount = (event: FormEvent) => {
+    event.preventDefault();
+    void run(async () => {
+      await api.signup(email.trim(), password, displayName.trim());
+      await api.login(email.trim(), password);
+      setSetupNeeded(false);
+      setEnrollment(await api.enrollMfa());
+      setStep('enroll');
     });
   };
 
@@ -66,10 +91,41 @@ export default function LoginPage() {
 
   return (
     <main>
-      <h1>Sign in to Solid</h1>
+      <h1>{setupNeeded === true && step === 'credentials' ? 'Set up Solid' : 'Sign in to Solid'}</h1>
       <ErrorMessage error={error} />
 
-      {step === 'credentials' && (
+      {step === 'credentials' && setupNeeded === true && (
+        <form onSubmit={submitFirstAccount} className="card">
+          <h2>Create the first account</h2>
+          <p>
+            Nobody has an account on this copy of Solid yet, so there is no password to be told. The account
+            you make here is the administrator: it can invite other people and change what the whole instance
+            does. Two-factor authentication comes next, and is not optional.
+          </p>
+          <label>
+            Your name
+            <input value={displayName} required maxLength={100} autoComplete="name"
+                   onChange={(e) => setDisplayName(e.target.value)} />
+          </label>
+          <label>
+            Email
+            <input type="email" value={email} required autoComplete="username"
+                   onChange={(e) => setEmail(e.target.value)} />
+          </label>
+          <label>
+            Password
+            <input type="password" value={password} required minLength={MIN_PASSWORD}
+                   autoComplete="new-password" onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          <p className="muted">
+            At least {MIN_PASSWORD} characters. A few unrelated words are easier to remember and harder to
+            guess than something short and clever.
+          </p>
+          <button type="submit" disabled={busy}>Create the account</button>
+        </form>
+      )}
+
+      {step === 'credentials' && setupNeeded !== true && (
         <form onSubmit={submitCredentials} className="card">
           <label>
             Email

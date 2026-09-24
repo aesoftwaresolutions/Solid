@@ -904,6 +904,8 @@ export const api = {
   me: () => request<Me>('/auth/me'),
   login: (email: string, password: string) =>
     request<{ mfaEnrolled: boolean }>('/auth/login', { method: 'POST', ...json({ email, password }) }),
+  /** Whether this instance has no accounts yet, so the first screen can offer to make one (spec 061). */
+  setupState: () => request<{ setupNeeded: boolean }>('/auth/setup-state'),
   signup: (email: string, password: string, displayName: string) =>
     request<User>('/auth/signup', { method: 'POST', ...json({ email, password, displayName }) }),
   enrollMfa: () => request<{ secret: string; otpauthUri: string }>('/auth/mfa/enroll', { method: 'POST' }),

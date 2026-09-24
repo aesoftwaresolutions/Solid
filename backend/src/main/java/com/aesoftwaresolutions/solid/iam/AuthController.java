@@ -101,6 +101,12 @@ class AuthController {
         return Map.of("revoked", sessions.revokeOthers(CurrentUser.require(), ClientIp.of(request)));
     }
 
+    /** Whether this instance is still unclaimed, so the login screen can offer to make the first account. */
+    @GetMapping("/setup-state")
+    Map<String, Object> setupState() {
+        return Map.of("setupNeeded", iam.setupNeeded());
+    }
+
     @PostMapping("/signup")
     ResponseEntity<IamService.User> signup(@Valid @RequestBody SignupRequest body, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
