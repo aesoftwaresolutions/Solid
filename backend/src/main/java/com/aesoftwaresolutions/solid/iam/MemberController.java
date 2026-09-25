@@ -36,8 +36,16 @@ class MemberController {
         this.audit = audit;
     }
 
+    /**
+     * Everyone who works on the books may see who else does. A viewer — often the client whose books they are —
+     * may not: the list is every colleague's email address (spec 065, row 8).
+     */
     @GetMapping("/members")
-    List<MembershipService.Member> list(@PathVariable UUID orgId) {
+    List<MembershipService.Member> list(@PathVariable UUID orgId, HttpServletRequest request) {
+        Role role = (Role) request.getAttribute(OrgAccessInterceptor.ROLE_ATTRIBUTE);
+        if (role == null || !role.canWrite()) {
+            throw new ForbiddenException("Viewers can see the books, but not the list of people");
+        }
         return memberships.members(orgId);
     }
 

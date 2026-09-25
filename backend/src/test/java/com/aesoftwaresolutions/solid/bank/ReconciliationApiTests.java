@@ -137,6 +137,28 @@ class ReconciliationApiTests {
         assertThat(api.get(recBase + "/" + october.get("id").asText() + "/candidates")).isEmpty();
     }
 
+    /** Spec 065 row 6: a bank transaction in a finished reconciliation cannot be quietly un-categorized. */
+    @Test
+    void spec065_row6_aReconciledTransactionCannotBeUncategorized() {
+        String recId = startSeptember().get("id").asText();
+        List<String> lines = candidateIds(recId);
+        api.post(recBase + "/" + recId + "/cleared", Map.of("lineIds", lines, "cleared", true), HttpStatus.OK);
+
+        String txn = api.get(base + "/bank-transactions?status=categorized").get(0).get("id").asText();
+        // While cleared in a reconciliation still in progress: the line has to be uncleared first.
+        assertThat(api.post(base + "/bank-transactions/" + txn + "/uncategorize", Map.of(), HttpStatus.CONFLICT)
+                .get("code").asText()).isEqualTo("TRANSACTION_RECONCILED");
+
+        api.post(recBase + "/" + recId + "/complete", Map.of(), HttpStatus.OK);
+        assertThat(api.post(base + "/bank-transactions/" + txn + "/uncategorize", Map.of(), HttpStatus.CONFLICT)
+                .get("code").asText()).isEqualTo("TRANSACTION_RECONCILED");
+
+        JsonNode october = api.post(recBase, Map.of("statementDate", "2026-10-31",
+                "statementEndingBalance", Map.of("amount", "1193.91", "currency", "USD")), HttpStatus.CREATED);
+        assertThat(amt(october.get("difference"))).as("September still stands exactly as it was reconciled")
+                .isEqualTo("0.00");
+    }
+
     @Test
     void ac4_unclearingLinesUpdatesTheDifference() {
         String recId = startSeptember().get("id").asText();

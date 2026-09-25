@@ -172,10 +172,13 @@ public class RecurringService {
                         .map(line -> new JournalService.NewLine(line.accountId(), line.amount(), line.memo()))
                         .toList();
                 try {
-                    // The check, the posting and the occurrence row are one transaction, and the journal's own
-                    // idempotency key makes a second attempt return the first entry instead of posting again.
-                    // Two runs at the same moment therefore cannot both book the rent.
+                    // The check, the posting and the occurrence row are one transaction, with the template row
+                    // locked first. The journal's idempotency key already stopped a double posting, but the
+                    // losing run hit it as a database error and gave up on every template after this one
+                    // (spec 065, row 13). Now the second run waits here and then finds the month posted.
                     Optional<JournalEntry> entry = orgScope.call(orgId, () -> {
+                        db.sql("select id from gl.recurring_entry where id = ? for update")
+                                .param(template.id()).query(UUID.class).single();
                         boolean alreadyPosted = db.sql("""
                                 select count(*) from gl.recurring_occurrence
                                 where recurring_id = ? and occurrence_date = ?""")

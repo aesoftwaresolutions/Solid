@@ -217,6 +217,21 @@ public class BankService {
             if (!txn.status().equals("categorized")) {
                 throw new BusinessRuleException("NOT_CATEGORIZED", "Transaction is not categorized");
             }
+            // The reversal is dated on the original day, so un-categorizing a transaction from a reconciled
+            // statement would change a balance someone already agreed with the bank (spec 065, row 6).
+            // Reconciliation reads the ledger the same way, by joining its lines (see ReconciliationService).
+            List<LocalDate> reconciledOn = db.sql("""
+                    select r.statement_date from bank.reconciliation_line rl
+                    join bank.reconciliation r on r.id = rl.reconciliation_id
+                    join gl.journal_line l on l.id = rl.journal_line_id
+                    where l.journal_entry_id = ?
+                    order by 1""").param(txn.journalEntryId()).query(LocalDate.class).list();
+            if (!reconciledOn.isEmpty()) {
+                throw new BusinessRuleException("TRANSACTION_RECONCILED",
+                        "This transaction is cleared in the reconciliation for the statement dated "
+                                + reconciledOn.get(0) + ". Unclear it there first (undoing that reconciliation if "
+                                + "it is finished), then un-categorize it.");
+            }
             journal.reverse(orgId, entityId, txn.journalEntryId(), null, "Uncategorized bank transaction");
             db.sql("update bank.bank_txn set status = 'new', journal_entry_id = null, category_account_id = null where id = ?")
                     .param(txnId).update();

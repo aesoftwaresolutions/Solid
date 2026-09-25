@@ -100,6 +100,11 @@ public class AssetService {
         Optional<LocalDate> lock = journal.periodLock(orgId, entityId);
 
         return orgScope.call(orgId, () -> {
+            // One run per entity at a time. Two at once both worked out the same months, and the loser's whole
+            // run was rolled back by the unique constraint (spec 065, row 18); now the second waits and then
+            // finds nothing left to post. The lock ends with the transaction.
+            db.sql("select pg_advisory_xact_lock(hashtext('solid-depreciation'), hashtext(?::text))")
+                    .param(entityId.toString()).query().singleRow();
             List<AssetModels.Asset> assets = db.sql("select id from fa.asset where entity_id = ? and status = 'active'")
                     .param(entityId).query(UUID.class).list().stream().map(id -> load(entityId, id)).toList();
 

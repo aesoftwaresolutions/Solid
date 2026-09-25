@@ -36,6 +36,10 @@ public class MoneyJsonModule extends SimpleModule {
     }
 
     static class Deserializer extends JsonDeserializer<Money> {
+
+        /** Optional sign, digits, optional point and digits — nothing else, and no exponent. */
+        private static final java.util.regex.Pattern PLAIN_DECIMAL =
+                java.util.regex.Pattern.compile("[+-]?(\\d+(\\.\\d*)?|\\.\\d+)");
         @Override
         public Money deserialize(JsonParser parser, DeserializationContext ctxt) throws IOException {
             JsonNode node = parser.readValueAsTree();
@@ -47,6 +51,13 @@ public class MoneyJsonModule extends SimpleModule {
             if (!amount.isTextual()) {
                 return ctxt.reportInputMismatch(Money.class,
                         "Money 'amount' must be a string like \"12.34\", not a JSON number");
+            }
+            // An amount arriving over the API is a plain decimal. Money.of also reads scientific notation,
+            // which is fine for Solid's own numbers but let a client send "1e3" and book 1,000.00 without a
+            // word (spec 065, row 11).
+            if (!PLAIN_DECIMAL.matcher(amount.asText()).matches()) {
+                return ctxt.reportInputMismatch(Money.class,
+                        "Money 'amount' must be a plain decimal like \"12.34\", not \"" + amount.asText() + "\"");
             }
             try {
                 return Money.of(amount.asText(), currency.asText());

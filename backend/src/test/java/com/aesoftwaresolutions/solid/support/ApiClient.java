@@ -202,6 +202,19 @@ public class ApiClient {
         return get(path, HttpStatus.OK);
     }
 
+    /**
+     * Sends a request without asserting its outcome and returns the status code — for tests that fire the same
+     * request concurrently and then count how many succeeded.
+     */
+    public int attempt(HttpMethod method, String path, Object body) {
+        HttpHeaders headers = new HttpHeaders();
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+        return http.exchange(path, method, new HttpEntity<>(body, headers), JsonNode.class)
+                .getStatusCode().value();
+    }
+
     public JsonNode delete(String path, HttpStatus expected) {
         return exchange(HttpMethod.DELETE, path, null, expected);
     }

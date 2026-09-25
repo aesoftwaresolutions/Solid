@@ -127,37 +127,48 @@ public class QuoteService {
         });
     }
 
-    /** Turns an accepted quote into a draft invoice. The quote keeps the id of the invoice it became. */
+    /**
+     * Turns an accepted quote into a draft invoice. The quote keeps the id of the invoice it became.
+     *
+     * <p>One transaction, with the quote row locked from the first check to the last write: two requests at once
+     * (a double-click is enough) used to both see "accepted" and both make an invoice (spec 065, row 4). Now
+     * the second waits, then sees "converted".
+     */
     public BillingModels.Invoice convert(UUID orgId, UUID entityId, UUID quoteId, LocalDate issueDate,
                                          String terms) {
         LegalEntity entity = orgs.getEntity(orgId, entityId);
-        QuoteModels.Quote quote = get(orgId, entityId, quoteId);
-        if (quote.status().equals("converted")) {
-            throw new BusinessRuleException("QUOTE_ALREADY_CONVERTED",
-                    "That quote is already invoice " + quote.invoiceId());
-        }
-        if (quote.expired()) {
-            throw new BusinessRuleException("QUOTE_EXPIRED",
-                    "That quote was only valid until " + quote.validUntil() + " and nobody accepted it in time. "
-                            + "Change the date if the price still stands.");
-        }
-        requireStatus(quote, "Only an accepted quote can be turned into an invoice", "accepted");
-        if (billing.getCustomer(orgId, entityId, quote.customerId()).isArchived()) {
-            throw new BusinessRuleException("CUSTOMER_ARCHIVED",
-                    "That customer is archived, so there is nobody to invoice");
-        }
+        return orgScope.call(orgId, () -> {
+            db.sql("select id from ar_ap.quote where entity_id = ? and id = ? for update")
+                    .params(entityId, quoteId).query(UUID.class).optional()
+                    .orElseThrow(() -> new NotFoundException("Quote " + quoteId + " not found"));
+            QuoteModels.Quote quote = load(entityId, quoteId, entity.baseCurrency());
+            if (quote.status().equals("converted")) {
+                throw new BusinessRuleException("QUOTE_ALREADY_CONVERTED",
+                        "That quote is already invoice " + quote.invoiceId());
+            }
+            if (quote.expired()) {
+                throw new BusinessRuleException("QUOTE_EXPIRED",
+                        "That quote was only valid until " + quote.validUntil() + " and nobody accepted it in time. "
+                                + "Change the date if the price still stands.");
+            }
+            requireStatus(quote, "Only an accepted quote can be turned into an invoice", "accepted");
+            if (billing.getCustomer(orgId, entityId, quote.customerId()).isArchived()) {
+                throw new BusinessRuleException("CUSTOMER_ARCHIVED",
+                        "That customer is archived, so there is nobody to invoice");
+            }
 
-        List<BillingService.NewLine> lines = quote.lines().stream()
-                .map(line -> new BillingService.NewLine(line.description(), line.quantity(), line.unitPrice(),
-                        line.incomeAccountId(), null))
-                .toList();
-        BillingModels.Invoice invoice = billing.createInvoice(orgId, entityId, quote.customerId(),
-                issueDate == null ? LocalDate.now() : issueDate, terms == null ? "net_30" : terms, null,
-                quote.memo(), lines);
-        orgScope.run(orgId, () -> db.sql(
-                "update ar_ap.quote set status = 'converted', invoice_id = ? where entity_id = ? and id = ?")
-                .params(invoice.id(), entityId, quoteId).update());
-        return invoice;
+            List<BillingService.NewLine> lines = quote.lines().stream()
+                    .map(line -> new BillingService.NewLine(line.description(), line.quantity(), line.unitPrice(),
+                            line.incomeAccountId(), null))
+                    .toList();
+            // Joins this transaction: if anything below fails, the invoice is not left behind either.
+            BillingModels.Invoice invoice = billing.createInvoice(orgId, entityId, quote.customerId(),
+                    issueDate == null ? LocalDate.now() : issueDate, terms == null ? "net_30" : terms, null,
+                    quote.memo(), lines);
+            db.sql("update ar_ap.quote set status = 'converted', invoice_id = ? where entity_id = ? and id = ?")
+                    .params(invoice.id(), entityId, quoteId).update();
+            return invoice;
+        });
     }
 
     // ---------------- internals (inside OrgScope unless noted) ----------------

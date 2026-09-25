@@ -35,6 +35,21 @@ class MoneyJsonTests {
                 .hasMessageContaining("must be a string");
     }
 
+    /** Spec 065 row 11: over the API an amount is a plain decimal, never scientific notation. */
+    @Test
+    void spec065_row11_rejectsScientificNotationAndOtherOddAmounts() throws Exception {
+        for (String odd : new String[]{"1e3", "1E3", "1E+2", "5e-1", "0x10", "1_000", " 1.00", "Infinity", "NaN"}) {
+            assertThatThrownBy(() -> mapper.readValue(
+                    "{\"total\":{\"amount\":\"" + odd + "\",\"currency\":\"USD\"}}", Invoice.class))
+                    .as(odd).isInstanceOf(com.fasterxml.jackson.databind.exc.MismatchedInputException.class);
+        }
+        for (String[] ok : new String[][]{{"1000", "1000.00"}, {"-12.50", "-12.50"}, {".5", "0.50"}, {"+3", "3.00"}}) {
+            Invoice parsed = mapper.readValue(
+                    "{\"total\":{\"amount\":\"" + ok[0] + "\",\"currency\":\"USD\"}}", Invoice.class);
+            org.assertj.core.api.Assertions.assertThat(parsed.total().toDecimalString()).as(ok[0]).isEqualTo(ok[1]);
+        }
+    }
+
     @Test
     void rejectsTooManyDecimals() {
         assertThatThrownBy(() -> mapper.readValue("{\"total\":{\"amount\":\"1.001\",\"currency\":\"USD\"}}", Invoice.class))

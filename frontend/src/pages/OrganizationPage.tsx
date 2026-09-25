@@ -32,6 +32,7 @@ export default function OrganizationPage() {
   const events = useLoader(() => api.auditEvents(orgId, limit), [orgId, limit]);
   const invitations = useLoader(() => api.invitations(orgId), [orgId]);
   const [peopleError, setPeopleError] = useState<unknown>(undefined);
+  const [withdrawing, setWithdrawing] = useState<string | null>(null);
 
   return (
     <main>
@@ -139,7 +140,16 @@ export default function OrganizationPage() {
                     {invitation.status === 'pending' && (
                       <button
                         type="button"
-                        onClick={() => api.revokeInvitation(orgId, invitation.id).then(invitations.reload)}
+                        disabled={withdrawing === invitation.id}
+                        onClick={() => {
+                          setWithdrawing(invitation.id);
+                          setPeopleError(undefined);
+                          api
+                            .revokeInvitation(orgId, invitation.id)
+                            .then(invitations.reload)
+                            .catch(setPeopleError)
+                            .finally(() => setWithdrawing(null));
+                        }}
                       >
                         Withdraw
                       </button>

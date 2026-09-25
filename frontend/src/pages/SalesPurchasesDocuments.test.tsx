@@ -512,6 +512,27 @@ describe('spec 054: quotes', () => {
     await waitFor(() => expect(calls.some((c) => c.key === `POST ${base}/quotes/q1/convert`)).toBe(true));
   });
 
+  test('spec 065 row 19: the quote buttons stand still while a request is on its way', async () => {
+    let finish: (value: Response) => void = () => {};
+    const { calls } = renderSales({});
+    // Hold the conversion open, the way a slow connection would.
+    const pending = new Promise<Response>((resolve) => {
+      finish = resolve;
+    });
+    const original = globalThis.fetch as unknown as (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init: RequestInit = {}) =>
+      String(input).includes('/convert') ? (calls.push({ key: 'convert', body: undefined }), pending) : original(input, init),
+    );
+
+    const button = await screen.findByLabelText('Make an invoice from Q-0001');
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(calls.filter((c) => c.key === 'convert')).toHaveLength(1);
+    expect(button).toBeDisabled();
+    finish(new Response(JSON.stringify({ id: 'i5', status: 'draft', total: money('4000.00') }), { status: 200 }));
+  });
+
   test('creates a quote from the form', async () => {
     const { calls } = renderSales({ [`POST ${base}/quotes`]: { ...quote, id: 'q2', status: 'draft' } });
 

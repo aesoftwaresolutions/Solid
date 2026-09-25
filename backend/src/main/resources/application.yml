@@ -27,7 +27,11 @@ management:
 
 server:
   port: 8081
-  forward-headers-strategy: framework
+  # native = Tomcat's RemoteIpValve: X-Forwarded-For is read right to left and only trusted from proxies on
+  # private/loopback addresses (Caddy, in the compose stack). "framework" took the leftmost value, which is
+  # whatever the caller typed — so the audit log's IP and the sign-in attempt limit could both be forged
+  # (spec 065, row 14).
+  forward-headers-strategy: native
   error:
     include-stacktrace: never
 

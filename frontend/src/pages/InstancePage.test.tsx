@@ -123,3 +123,24 @@ describe('spec 049: tax figures added on this installation', () => {
     });
   });
 });
+
+describe('spec 065: fourth review', () => {
+  test('row 19: a password-reset link can be taken off the screen once it is copied', async () => {
+    mockApi({
+      'GET /api/v1/instance/users': [
+        { id: 'u2', email: 'someone@example.test', displayName: 'Someone', mfaEnabled: true, isInstanceAdmin: false },
+      ],
+      'GET /api/v1/system/info': { name: 'Solid', version: '0.1.0', databaseSchemaVersion: '202609180003' },
+      'GET /api/v1/system/backup-status': status,
+      'GET /api/v1/tax/rule-packs': packs,
+      'POST /api/v1/instance/users/u2/password-reset': { email: 'someone@example.test', resetPath: '/reset-password?token=t' },
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByLabelText('Reset password for someone@example.test'));
+    expect(await screen.findByLabelText('Reset link')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done — hide it' }));
+    expect(screen.queryByLabelText('Reset link')).not.toBeInTheDocument();
+  });
+});

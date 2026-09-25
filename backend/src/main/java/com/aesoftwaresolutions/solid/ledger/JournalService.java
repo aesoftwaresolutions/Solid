@@ -107,27 +107,36 @@ public class JournalService {
         });
     }
 
+    /**
+     * Reverses a posted entry. One transaction, holding the original's row lock throughout: two requests at once
+     * used to both pass the "already reversed?" check, and the loser met a bare database conflict instead of
+     * {@code ALREADY_REVERSED} (spec 065, row 13).
+     */
     public JournalEntry reverse(UUID orgId, UUID entityId, UUID entryId, LocalDate reversalDate, String memo) {
         orgs.getEntity(orgId, entityId);
-        JournalEntry original = orgScope.call(orgId, () -> lockEntry(entityId, entryId));
-        if (original.status() != JournalEntry.Status.posted) {
-            throw new BusinessRuleException("NOT_POSTED", "Only posted entries can be reversed; delete the draft instead");
-        }
-        boolean alreadyReversed = orgScope.call(orgId, () -> db.sql(
-                        "select exists (select 1 from gl.journal_entry where reverses_entry_id = ?)")
-                .param(entryId).query(Boolean.class).single());
-        if (alreadyReversed) {
-            throw new BusinessRuleException("ALREADY_REVERSED", "Entry has already been reversed");
-        }
-        List<NewLine> negated = original.lines().stream()
-                .map(l -> new NewLine(l.accountId(), l.amount().negate(), l.memo())).toList();
-        String reversalMemo = memo != null ? memo
-                : "Reversal of " + original.entryDate() + (original.memo() == null ? "" : ": " + original.memo());
-        JournalEntry reversal = create(orgId, entityId, reversalDate != null ? reversalDate : original.entryDate(),
-                truncate(reversalMemo), true, negated, null, "reversal", null, entryId).entry();
-        audit.record(AuditLog.Actor.current(), orgId, "journal_entry_reversed", "journal_entry", entryId,
-                Map.of("entityId", entityId.toString(), "reversalEntryId", reversal.id().toString()));
-        return reversal;
+        return orgScope.call(orgId, () -> {
+            JournalEntry original = lockEntry(entityId, entryId);
+            if (original.status() != JournalEntry.Status.posted) {
+                throw new BusinessRuleException("NOT_POSTED",
+                        "Only posted entries can be reversed; delete the draft instead");
+            }
+            boolean alreadyReversed = db.sql(
+                            "select exists (select 1 from gl.journal_entry where reverses_entry_id = ?)")
+                    .param(entryId).query(Boolean.class).single();
+            if (alreadyReversed) {
+                throw new BusinessRuleException("ALREADY_REVERSED", "Entry has already been reversed");
+            }
+            List<NewLine> negated = original.lines().stream()
+                    .map(l -> new NewLine(l.accountId(), l.amount().negate(), l.memo())).toList();
+            String reversalMemo = memo != null ? memo
+                    : "Reversal of " + original.entryDate() + (original.memo() == null ? "" : ": " + original.memo());
+            // create() opens its own org scope; inside this one it simply joins the transaction.
+            JournalEntry reversal = create(orgId, entityId, reversalDate != null ? reversalDate : original.entryDate(),
+                    truncate(reversalMemo), true, negated, null, "reversal", null, entryId).entry();
+            audit.record(AuditLog.Actor.current(), orgId, "journal_entry_reversed", "journal_entry", entryId,
+                    Map.of("entityId", entityId.toString(), "reversalEntryId", reversal.id().toString()));
+            return reversal;
+        });
     }
 
     public void deleteDraft(UUID orgId, UUID entityId, UUID entryId) {

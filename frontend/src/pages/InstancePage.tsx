@@ -88,7 +88,10 @@ export default function InstancePage() {
             {resetLink && (
               <p role="status">
                 Link for {resetLink.email} — copy it now, it is shown once:{' '}
-                <input readOnly value={resetLink.link} aria-label="Reset link" size={60} onFocus={(e) => e.target.select()} />
+                <input readOnly value={resetLink.link} aria-label="Reset link" size={60} onFocus={(e) => e.target.select()} />{' '}
+                <button type="button" onClick={() => setResetLink(null)}>
+                  Done — hide it
+                </button>
               </p>
             )}
           </>

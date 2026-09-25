@@ -76,6 +76,7 @@ public class BrandingService {
         String contentType = imageType(bytes)
                 .orElseThrow(() -> new ApiProblemException(400, "UNSUPPORTED_LOGO",
                         "A logo must be a PNG or a JPEG"));
+        requireSaneDimensions(bytes);
         orgScope.run(orgId, () -> db.sql("""
                         insert into org.branding (entity_id, org_id, logo_bytes, logo_content_type)
                         values (?, ?, ?, ?)
@@ -84,6 +85,38 @@ public class BrandingService {
                 .params(entityId, orgId, bytes, contentType)
                 .update());
         return get(orgId, entityId);
+    }
+
+    /** Plenty for a letterhead printed a few centimetres wide; far short of a decompression bomb. */
+    private static final int MAX_LOGO_SIDE = 4000;
+
+    /**
+     * Reads the width and height from the image header without decoding a single pixel. A megabyte of PNG can
+     * describe a picture that takes hundreds of megabytes to decode, and every invoice, quote and statement
+     * decodes the logo afresh — so the byte limit alone does not bound the memory (spec 065, row 16).
+     */
+    private static void requireSaneDimensions(byte[] bytes) {
+        try (javax.imageio.stream.ImageInputStream in =
+                     javax.imageio.ImageIO.createImageInputStream(new java.io.ByteArrayInputStream(bytes))) {
+            java.util.Iterator<javax.imageio.ImageReader> readers = javax.imageio.ImageIO.getImageReaders(in);
+            if (!readers.hasNext()) {
+                throw new ApiProblemException(400, "UNSUPPORTED_LOGO", "That image could not be read");
+            }
+            javax.imageio.ImageReader reader = readers.next();
+            try {
+                reader.setInput(in, true, true);
+                int width = reader.getWidth(0);
+                int height = reader.getHeight(0);
+                if (width > MAX_LOGO_SIDE || height > MAX_LOGO_SIDE) {
+                    throw new ApiProblemException(400, "LOGO_TOO_LARGE", "A logo must be at most "
+                            + MAX_LOGO_SIDE + " pixels on each side; this one is " + width + "×" + height);
+                }
+            } finally {
+                reader.dispose();
+            }
+        } catch (java.io.IOException e) {
+            throw new ApiProblemException(400, "UNSUPPORTED_LOGO", "That image could not be read");
+        }
     }
 
     @Transactional

@@ -233,6 +233,7 @@ export default function SalesPage() {
                       <button
                         type="button"
                         aria-label={`Mark ${quote.quoteNumber} sent`}
+                        disabled={busy}
                         onClick={() => act(api.quoteAction(orgId, entityId, quote.id, 'send').then(quotes.reload))}
                       >
                         Sent
@@ -243,6 +244,7 @@ export default function SalesPage() {
                         <button
                           type="button"
                           aria-label={`Accept ${quote.quoteNumber}`}
+                        disabled={busy}
                           onClick={() => act(api.quoteAction(orgId, entityId, quote.id, 'accept').then(quotes.reload))}
                         >
                           Accepted
@@ -250,6 +252,7 @@ export default function SalesPage() {
                         <button
                           type="button"
                           aria-label={`Decline ${quote.quoteNumber}`}
+                        disabled={busy}
                           onClick={() => act(api.quoteAction(orgId, entityId, quote.id, 'decline').then(quotes.reload))}
                         >
                           Declined
@@ -260,6 +263,7 @@ export default function SalesPage() {
                       <button
                         type="button"
                         aria-label={`Make an invoice from ${quote.quoteNumber}`}
+                        disabled={busy}
                         onClick={() => act(api.convertQuote(orgId, entityId, quote.id).then(quotes.reload))}
                       >
                         Make an invoice

@@ -73,6 +73,38 @@ class DesktopModeTests {
         assertThat(Files.readString(keyFile).trim()).isEqualTo(key);
     }
 
+    @Autowired
+    org.springframework.core.env.Environment environment;
+
+    /**
+     * Spec 065 row 2. The bundled database listens on a loopback port every account on the machine can reach, so
+     * reaching it must not be enough: without the password in this install's own folder, nobody gets in — not
+     * as the superuser, which would walk straight past row-level security.
+     */
+    @Test
+    void spec065_row2_theBundledDatabaseWantsAPasswordThatOnlyThisInstallHas() throws Exception {
+        String url = environment.getProperty("spring.datasource.url");
+        assertThat(url).startsWith("jdbc:postgresql://127.0.0.1:");
+
+        for (String guess : new String[]{"", "postgres", "wrong"}) {
+            java.util.Properties props = new java.util.Properties();
+            props.setProperty("user", "postgres");
+            props.setProperty("password", guess);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> java.sql.DriverManager.getConnection(url, props)
+                            .close())
+                    .as("password '" + guess + "'").isInstanceOf(java.sql.SQLException.class);
+        }
+
+        Path passwordFile = APP_DIR.resolve("db.password");
+        assertThat(passwordFile).exists();
+        assertThat(Files.getPosixFilePermissions(passwordFile)).containsExactlyInAnyOrder(
+                PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE);
+        try (java.sql.Connection ok = java.sql.DriverManager.getConnection(url, "postgres",
+                Files.readString(passwordFile).trim())) {
+            assertThat(ok.isValid(2)).isTrue();
+        }
+    }
+
     @Test
     void ac3_rowLevelSecurityStillAppliesUnderTheBundledDatabase() {
         ApiClient owner = new ApiClient(rest);

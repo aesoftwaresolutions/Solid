@@ -69,6 +69,8 @@ public class RecurringInvoiceService {
             if (line.quantity().signum() <= 0) {
                 throw new IllegalArgumentException("Quantity must be more than zero");
             }
+            // Checked now, while someone is looking, rather than failing every month once it runs.
+            billing.checkBillable(orgId, entityId, line.incomeAccountId(), line.taxRateId());
         }
         int day = dayOfMonth == null ? startDate.getDayOfMonth() : dayOfMonth;
         if (day < 1 || day > 31) {
@@ -172,9 +174,12 @@ public class RecurringInvoiceService {
             }
             for (LocalDate date : dueDates(template, through, template.lastCreated())) {
                 try {
-                    // The check, the invoice and the occurrence row are one transaction, so two runs at the
-                    // same moment cannot both bill the same month.
+                    // The check, the invoice and the occurrence row are one transaction, and the template row
+                    // is locked first: without the lock, two runs at the same moment both saw no occurrence and
+                    // both made an invoice (spec 065, row 5). Now the second waits and then finds it.
                     Optional<BillingModels.Invoice> invoice = orgScope.call(orgId, () -> {
+                        db.sql("select id from ar_ap.recurring_invoice where id = ? for update")
+                                .param(template.id()).query(UUID.class).single();
                         boolean exists = db.sql("""
                                 select count(*) from ar_ap.recurring_invoice_occurrence
                                 where recurring_invoice_id = ? and occurrence_date = ?""")

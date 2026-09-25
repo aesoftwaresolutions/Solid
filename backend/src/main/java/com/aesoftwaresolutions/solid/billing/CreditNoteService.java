@@ -120,6 +120,18 @@ public class CreditNoteService {
                 throw new BusinessRuleException("EMPTY_CREDIT_NOTE",
                         "A credit note needs at least one line and a positive total");
             }
+            // The invoices this note credits must still be open now, not just when the note was drafted: a
+            // credit against a voided invoice would undo a sale that was already undone (spec 065, row 1).
+            List<String> closed = db.sql("""
+                    select distinct i.invoice_number from ar_ap.credit_note_line cl
+                    join ar_ap.invoice_line il on il.id = cl.invoice_line_id
+                    join ar_ap.invoice i on i.id = il.invoice_id
+                    where cl.credit_note_id = ? and i.status in ('void', 'draft')
+                    order by 1""").param(creditNoteId).query(String.class).list();
+            if (!closed.isEmpty()) {
+                throw new BusinessRuleException("INVOICE_NOT_OPEN",
+                        "This credit note credits " + String.join(", ", closed) + ", which is no longer open");
+            }
             Account receivable = billing.receivableAccount(orgId, entityId);
             List<JournalService.NewLine> journalLines = new ArrayList<>();
             for (BillingModels.CreditNoteLine line : credit.lines()) {
@@ -285,12 +297,15 @@ public class CreditNoteService {
         Map<String, Object> row = db.sql("""
                         select l.amount_minor, l.tax_rate_id, l.tax_amount_minor, i.id as invoice_id,
                                i.status, i.customer_id,
-                               coalesce((select sum(cl.amount_minor) from ar_ap.credit_note_line cl
-                                         join ar_ap.credit_note cn on cn.id = cl.credit_note_id
-                                         where cl.invoice_line_id = l.id and cn.status <> 'void'
-                                           and cl.credit_note_id <> ?), 0) as already_credited_minor
+                               coalesce(sum(cl.amount_minor), 0) as already_credited_minor,
+                               coalesce(sum(cl.tax_amount_minor), 0) as already_reversed_tax_minor
                         from ar_ap.invoice_line l join ar_ap.invoice i on i.id = l.invoice_id
-                        where l.id = ? and i.entity_id = ?""")
+                        left join ar_ap.credit_note_line cl on cl.invoice_line_id = l.id
+                             and cl.credit_note_id <> ?
+                             and exists (select 1 from ar_ap.credit_note cn
+                                         where cn.id = cl.credit_note_id and cn.status <> 'void')
+                        where l.id = ? and i.entity_id = ?
+                        group by l.id, i.id""")
                 .params(creditNoteId, invoiceLineId, entityId).query().listOfRows().stream().findFirst()
                 .orElseThrow(() -> new NotFoundException("Invoice line " + invoiceLineId + " not found"));
 
@@ -319,12 +334,24 @@ public class CreditNoteService {
             return new Origin(null, Money.zero(currency));
         }
         Money originalTax = Money.ofMinor(((Number) row.get("tax_amount_minor")).longValue(), currency);
-        // Full credit: give back exactly what was charged, so a rounded cent is not left stranded.
-        if (creditedAmount.compareTo(originalAmount) == 0 && alreadyCredited.isZero()) {
-            return new Origin(rateId, originalTax);
+        Money alreadyReversed = Money.ofMinor(((Number) row.get("already_reversed_tax_minor")).longValue(),
+                currency);
+        Money taxLeft = originalTax.subtract(alreadyReversed);
+        if (taxLeft.isNegative()) {
+            // Only possible for notes issued before this rule existed; there is nothing left to give back.
+            taxLeft = Money.zero(currency);
         }
-        // Partial credit: the credited amount at the rate the invoice used, whatever its state today.
-        return new Origin(rateId, salesTax.reversalAtStoredRate(entityId, rateId, creditedAmount).tax());
+        // Full credit — in one note or finished off by this one — gives back exactly what is left of the tax
+        // charged. Each partial note rounds on its own, so without this a line credited in halves can end a cent
+        // short or a cent over, and the CPA's ruling is that a fully credited sale owes no tax at all
+        // (spec 065, row 3).
+        if (alreadyCredited.add(creditedAmount).compareTo(originalAmount) == 0) {
+            return new Origin(rateId, taxLeft);
+        }
+        // Partial credit: the credited amount at the rate the invoice used, whatever its state today — but never
+        // more than is still left, however the rounding of earlier partial notes happened to fall.
+        Money partial = salesTax.reversalAtStoredRate(entityId, rateId, creditedAmount).tax();
+        return new Origin(rateId, partial.compareTo(taxLeft) > 0 ? taxLeft : partial);
     }
 
     private BillingModels.CreditNote lock(UUID entityId, UUID creditNoteId) {

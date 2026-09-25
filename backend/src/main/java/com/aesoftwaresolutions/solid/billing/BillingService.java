@@ -256,10 +256,43 @@ public class BillingService {
                 throw new BusinessRuleException("INVOICE_HAS_CREDITS",
                         "Unapply the credit notes pointed at this invoice before voiding it");
             }
+            // A credit note written against this invoice's lines has already reversed part of the sale. Voiding
+            // the invoice as well would reverse that part a second time — income, sales tax and receivable all
+            // wrong, with no error anywhere (spec 065, row 1). Applied or not, drafted or issued, it has to go
+            // first.
+            List<String> creditNotes = db.sql("""
+                    select distinct cn.credit_number from ar_ap.credit_note_line cl
+                    join ar_ap.credit_note cn on cn.id = cl.credit_note_id
+                    join ar_ap.invoice_line il on il.id = cl.invoice_line_id
+                    where il.invoice_id = ? and cn.status <> 'void'
+                    order by 1""").param(invoiceId).query(String.class).list();
+            if (!creditNotes.isEmpty()) {
+                throw new BusinessRuleException("INVOICE_HAS_CREDIT_NOTES", "Credit note"
+                        + (creditNotes.size() == 1 ? " " : "s ") + String.join(", ", creditNotes)
+                        + " already credit this invoice. Void "
+                        + (creditNotes.size() == 1 ? "it" : "them") + " before voiding the invoice.");
+            }
             journal.reverse(orgId, entityId, invoice.journalEntryId(), null, "Void invoice " + invoice.invoiceNumber());
             db.sql("update ar_ap.invoice set status = 'void' where id = ?").param(invoiceId).update();
             return loadInvoice(entityId, invoiceId);
         });
+    }
+
+    /**
+     * The checks an invoice line's account and tax rate must pass, for callers that keep lines to bill later.
+     * A recurring template used to accept anything and then fail quietly every month (spec 065, row 12).
+     */
+    public void checkBillable(UUID orgId, UUID entityId, UUID incomeAccountId, UUID taxRateId) {
+        orgs.getEntity(orgId, entityId);
+        Account income = accounts.get(orgId, entityId, incomeAccountId);
+        if (income.type() != AccountType.income || income.isHeader() || income.isArchived()) {
+            throw new BusinessRuleException("ACCOUNT_NOT_POSTABLE",
+                    "Invoice lines must use an active, non-header income account");
+        }
+        if (taxRateId != null) {
+            // Throws for a rate that is not one of this entity's, including another organization's.
+            salesTax.get(orgId, entityId, taxRateId);
+        }
     }
 
     // ---------------- payments ----------------

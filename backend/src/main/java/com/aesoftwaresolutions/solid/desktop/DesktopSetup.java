@@ -120,20 +120,89 @@ public class DesktopSetup implements EnvironmentPostProcessor {
         return encoded;
     }
 
+    /**
+     * Makes a file readable by this user alone.
+     *
+     * <p>On Linux and macOS that is mode 600. Windows has no such modes, and the key used to get no protection of
+     * its own there — only whatever the folder above it happened to allow (spec 065, row 10). There, the file's
+     * access list is replaced with a single entry: full control for the user running Solid, and nobody else.
+     */
     private void ownerOnly(Path file) {
         try {
             Files.setPosixFilePermissions(file, Set.of(PosixFilePermission.OWNER_READ,
                     PosixFilePermission.OWNER_WRITE));
+            return;
         } catch (UnsupportedOperationException | IOException e) {
-            // Windows has no POSIX permissions; the file sits in the user's own profile directory, which is
-            // the protection the platform offers. Nothing to do but carry on.
-            log.debug("Could not set owner-only permissions on " + file, e);
+            // Not a POSIX file system: Windows. Fall through to its access list.
+        }
+        java.nio.file.attribute.AclFileAttributeView acl =
+                Files.getFileAttributeView(file, java.nio.file.attribute.AclFileAttributeView.class);
+        if (acl == null) {
+            log.warn("Could not restrict " + file + " to this user; protect the Solid folder yourself.");
+            return;
+        }
+        try {
+            java.nio.file.attribute.UserPrincipal me;
+            try {
+                // The person running Solid — not the file's owner, which for an elevated process can be the
+                // whole Administrators group.
+                me = file.getFileSystem().getUserPrincipalLookupService()
+                        .lookupPrincipalByName(System.getProperty("user.name"));
+            } catch (IOException notFound) {
+                me = Files.getOwner(file);
+            }
+            java.nio.file.attribute.AclEntry onlyMe = java.nio.file.attribute.AclEntry.newBuilder()
+                    .setType(java.nio.file.attribute.AclEntryType.ALLOW)
+                    .setPrincipal(me)
+                    .setPermissions(java.util.EnumSet.allOf(java.nio.file.attribute.AclEntryPermission.class))
+                    .build();
+            acl.setAcl(java.util.List.of(onlyMe));
+        } catch (IOException | SecurityException e) {
+            log.warn("Could not restrict " + file + " to this user; protect the Solid folder yourself.");
         }
     }
 
-    /** Starts the bundled PostgreSQL against this installation's data directory and points Spring at it. */
+    /**
+     * A secret kept in one file in the app folder, made the first time it is asked for: owner-only, never
+     * regenerated while the file exists. Returns the value and whether it was just made.
+     */
+    private Secret secret(Path file, String what) throws IOException {
+        if (Files.exists(file)) {
+            return new Secret(Files.readString(file, StandardCharsets.UTF_8).trim(), false);
+        }
+        byte[] random = new byte[24];
+        new SecureRandom().nextBytes(random);
+        // Hex: nothing in it needs quoting in SQL or escaping in a connection string.
+        String value = java.util.HexFormat.of().formatHex(random);
+        Files.writeString(file, value + System.lineSeparator(), StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        ownerOnly(file);
+        log.info("Solid desktop: made a new " + what + " at " + file + ".");
+        return new Secret(value, true);
+    }
+
+    private record Secret(String value, boolean isNew) {
+    }
+
+    /**
+     * Starts the bundled PostgreSQL against this installation's data directory and points Spring at it.
+     *
+     * <p>The server listens on a loopback port, and every account on the machine can reach a loopback port. The
+     * library that sets PostgreSQL up creates it with {@code trust} login, meaning whoever reached the port
+     * could connect as the superuser — and a superuser walks straight past row-level security (spec 065, row 2).
+     * So the superuser gets a password only this installation knows ({@code db.password}, owner-only, beside
+     * the master key), and the server's access rules are rewritten to demand it from every connection.
+     */
     private Map<String, Object> database(Path appDir) throws IOException {
         Path dataDir = appDir.resolve("db");
+        Path hba = dataDir.resolve("pg_hba.conf");
+        Secret password = secret(appDir.resolve("db.password"), "database password");
+        if (password.isNew() && Files.exists(hba)) {
+            // An install from before this rule, or one whose password file went missing: open the door once,
+            // on loopback only, so the new password can be set. It is closed again moments later, below.
+            Files.writeString(hba, ACCESS_WHILE_SETTING_PASSWORD, StandardCharsets.UTF_8);
+        }
+
         // A copy killed outright leaves its server holding this directory; take it over before starting.
         DesktopShutdown.stopAnyServerStillRunning(dataDir, log);
         EmbeddedPostgres started = EmbeddedPostgres.builder()
@@ -142,15 +211,53 @@ public class DesktopSetup implements EnvironmentPostProcessor {
                 .setOverrideWorkingDirectory(appDir.resolve("pgbin").toFile())
                 // Loopback only: a desktop install is for the person at this machine.
                 .setServerConfig("listen_addresses", "127.0.0.1")
+                // The library checks the server is up by connecting; once access needs the password, so does it.
+                .setConnectConfig("password", password.value())
                 .start();
         DesktopShutdown.remember(started, dataDir);
 
+        String url = "jdbc:postgresql://127.0.0.1:" + started.getPort() + "/postgres";
+        requirePassword(url, password.value(), hba);
+
         // The bundled server's own superuser runs the migrations, exactly as the database owner does on a
         // server. Every pooled connection then switches to solid_app, so row-level security still applies.
-        String url = "jdbc:postgresql://127.0.0.1:" + started.getPort() + "/postgres";
         return Map.of("spring.datasource.url", url,
                 "spring.datasource.username", "postgres",
-                "spring.datasource.password", "postgres");
+                "spring.datasource.password", password.value());
+    }
+
+    /** Written only while a new password is being set; replaced by {@link #ACCESS} straight afterwards. */
+    private static final String ACCESS_WHILE_SETTING_PASSWORD = """
+            # Written by Solid for a moment while it sets the database password. It is replaced within seconds.
+            host all postgres 127.0.0.1/32 trust
+            host all postgres ::1/128 trust
+            """;
+
+    /** Every connection, from anywhere, must prove it knows the password. No other way in. */
+    private static final String ACCESS = """
+            # Written by Solid (spec 065). Every connection needs the password in db.password, in the Solid folder.
+            # Edits here are overwritten each time Solid starts.
+            host all all 127.0.0.1/32 scram-sha-256
+            host all all ::1/128 scram-sha-256
+            """;
+
+    /**
+     * Sets the superuser's password and makes the server demand it. Idempotent, and done on every start, so an
+     * install is brought up to this rule the first time it runs with it — and any hand edit is put back.
+     */
+    private void requirePassword(String url, String password, Path hba) throws IOException {
+        try (java.sql.Connection db = java.sql.DriverManager.getConnection(url, "postgres", password);
+                java.sql.Statement sql = db.createStatement()) {
+            // Hex only, so there is nothing in it to quote; ALTER ROLE cannot take a bind parameter.
+            if (!password.matches("[0-9a-f]+")) {
+                throw new IllegalStateException("The database password file is not in the expected form");
+            }
+            sql.execute("alter role postgres password '" + password + "'");
+            Files.writeString(hba, ACCESS, StandardCharsets.UTF_8);
+            sql.execute("select pg_reload_conf()");
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException("Could not secure the bundled database: " + e.getMessage(), e);
+        }
     }
 
     /**

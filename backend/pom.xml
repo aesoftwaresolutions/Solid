@@ -275,6 +275,11 @@
                     <excludedLicense>GPL-2.0</excludedLicense>
                     <excludedLicense>GPL-3.0</excludedLicense>
                     <excludedLicense>AGPL-3.0</excludedLicense>
+                    <!-- Spec 065, row 17: the rule in CLAUDE.md is permissive licences only, LGPL included. -->
+                    <excludedLicense>GNU Lesser General Public License</excludedLicense>
+                    <excludedLicense>LGPL</excludedLicense>
+                    <excludedLicense>LGPL-2.1</excludedLicense>
+                    <excludedLicense>LGPL-3.0</excludedLicense>
                   </excludedLicenses>
                 </configuration>
               </execution>

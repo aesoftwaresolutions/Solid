@@ -142,3 +142,28 @@ describe('spec 047: changing and removing people', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('cannot remove the last owner');
   });
 });
+
+describe('spec 065: fourth review', () => {
+  test('row 19: withdrawing an invitation that fails says so instead of doing nothing', async () => {
+    mockApi(
+      {
+        'GET /api/v1/orgs/o1/members': [{ userId: 'u1', email: 'owner@example.test', displayName: 'Owner', role: 'owner' }],
+        'GET /api/v1/orgs/o1/audit-events': [],
+        'GET /api/v1/orgs/o1/invitations': [invitation],
+        'DELETE /api/v1/orgs/o1/invitations/i1': { detail: 'That invitation was already accepted', status: 409 },
+      },
+      { status: { 'DELETE /api/v1/orgs/o1/invitations/i1': 409 } },
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/orgs/o1/settings']}>
+        <Routes>
+          <Route path="/orgs/:orgId/settings" element={<OrganizationPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Withdraw' }));
+    expect(await screen.findByText(/already accepted/)).toBeInTheDocument();
+  });
+});

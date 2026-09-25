@@ -1,6 +1,7 @@
 package com.aesoftwaresolutions.solid.reporting;
 
 import com.aesoftwaresolutions.solid.bank.BankService;
+import com.aesoftwaresolutions.solid.common.CsvCells;
 import com.aesoftwaresolutions.solid.money.Money;
 import com.aesoftwaresolutions.solid.org.LegalEntity;
 import com.aesoftwaresolutions.solid.org.OrgService;
@@ -157,19 +158,8 @@ public class TaxLineReportService {
         return String.format("%04d%s", digits.isEmpty() ? 0 : Integer.parseInt(digits), suffix);
     }
 
+    /** Through the shared writer, so an account name cannot become a formula in the export (spec 065, row 9). */
     private static String row(String... cells) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < cells.length; i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            String cell = cells[i] == null ? "" : cells[i];
-            if (cell.contains(",") || cell.contains("\"") || cell.contains("\n")) {
-                sb.append('"').append(cell.replace("\"", "\"\"")).append('"');
-            } else {
-                sb.append(cell);
-            }
-        }
-        return sb.append('\n').toString();
+        return CsvCells.row((Object[]) cells);
     }
 }
