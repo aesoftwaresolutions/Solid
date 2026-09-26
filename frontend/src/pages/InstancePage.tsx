@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ApiError, api } from '../api';
+import { ApiError, DatabaseSslMode, api } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
 
 /** Bytes for reading; the exact number stays available on hover. */
@@ -148,6 +148,8 @@ export default function InstancePage() {
           </ul>
         )}
       </Card>
+
+      {info.value?.desktopMode && <DatabaseConnectionSettings />}
 
       <Card title="Backup readiness">
         {forbidden ? (
@@ -314,5 +316,151 @@ function AddTaxFigure({
         Add figure
       </button>
     </form>
+  );
+}
+
+/** Desktop builds only: point Solid at a PostgreSQL server other than the bundled one (spec 066). */
+function DatabaseConnectionSettings() {
+  const status = useLoader(() => api.desktopDatabaseStatus(), []);
+  const [host, setHost] = useState('');
+  const [port, setPort] = useState('5432');
+  const [database, setDatabase] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [sslMode, setSslMode] = useState<DatabaseSslMode>('require');
+  const [testResult, setTestResult] = useState<{ ok: boolean; message?: string } | undefined>(undefined);
+  const [error, setError] = useState<unknown>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [restartNotice, setRestartNotice] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (status.value?.current) {
+      setHost(status.value.current.host);
+      setPort(String(status.value.current.port));
+      setDatabase(status.value.current.database);
+      setUsername(status.value.current.username);
+      setSslMode(status.value.current.sslMode);
+    }
+  }, [status.value]);
+
+  function input(): { host: string; port: number; database: string; username: string; password: string; sslMode: DatabaseSslMode } {
+    return { host, port: Number(port) || 5432, database, username, password, sslMode };
+  }
+
+  return (
+    <Card title="Database connection">
+      <p className="muted">
+        By default Solid runs its own PostgreSQL server on this computer. If you already have a PostgreSQL
+        server elsewhere — a small office server, a NAS — Solid can use that instead. A change here takes
+        effect the next time Solid starts, not immediately.
+      </p>
+      <ErrorMessage error={status.error} />
+      {!status.value && !status.error && <Loading what="database settings" />}
+      {status.value && (
+        <>
+          <p>
+            Currently using: <strong>{status.value.mode === 'remote' ? 'a server you configured' : "Solid's built-in database"}</strong>
+          </p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setBusy(true);
+              setError(undefined);
+              setTestResult(undefined);
+              api
+                .testDesktopDatabase(input())
+                .then(setTestResult)
+                .catch(setError)
+                .finally(() => setBusy(false));
+            }}
+          >
+            <label>
+              Host
+              <input value={host} required onChange={(e) => setHost(e.target.value)} placeholder="192.168.1.50" />
+            </label>
+            <label>
+              Port
+              <input value={port} required inputMode="numeric" onChange={(e) => setPort(e.target.value)} />
+            </label>
+            <label>
+              Database name
+              <input value={database} required onChange={(e) => setDatabase(e.target.value)} />
+            </label>
+            <label>
+              Username
+              <input value={username} required onChange={(e) => setUsername(e.target.value)} />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                required
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={status.value.mode === 'remote' ? 'enter to change or confirm' : ''}
+              />
+            </label>
+            <label>
+              Encryption
+              <select value={sslMode} onChange={(e) => setSslMode(e.target.value as DatabaseSslMode)}>
+                <option value="require">Required (recommended)</option>
+                <option value="verify-full">Required, and verify the server's certificate</option>
+                <option value="disable">None — only for a trusted local network</option>
+              </select>
+            </label>
+            <ErrorMessage error={error} />
+            {testResult && (
+              <p role="status" className={testResult.ok ? undefined : 'error'}>
+                {testResult.ok ? 'Connected successfully.' : `Could not connect: ${testResult.message}`}
+              </p>
+            )}
+            {restartNotice && <p role="status">{restartNotice}</p>}
+            <button type="submit" disabled={busy}>
+              Test connection
+            </button>{' '}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                setError(undefined);
+                setRestartNotice(undefined);
+                api
+                  .saveDesktopDatabase(input())
+                  .then(() =>
+                    setRestartNotice('Saved. Quit and reopen Solid for the new database to take effect.'),
+                  )
+                  .catch(setError)
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Save and use this database
+            </button>{' '}
+            {status.value.mode === 'remote' && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  setError(undefined);
+                  setRestartNotice(undefined);
+                  api
+                    .resetDesktopDatabase()
+                    .then(() =>
+                      setRestartNotice(
+                        'Saved. Quit and reopen Solid to go back to the built-in database.',
+                      ),
+                    )
+                    .catch(setError)
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Use the built-in database instead
+              </button>
+            )}
+          </form>
+        </>
+      )}
+    </Card>
   );
 }
