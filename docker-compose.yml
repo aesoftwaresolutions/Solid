@@ -1,4 +1,9 @@
-# Local development stack: `docker compose up --build`, then open http://localhost:8080
+# Local development stack: `docker compose up --build`, then open http://localhost:${SOLID_WEB_PORT:-8080}
+#
+# Every setting that's specific to one machine (which ports are already taken, which network interface to
+# expose the database on) is a variable here with a plain default -- override it in that machine's own .env,
+# never by editing this file, so this file stays the same everywhere and `ops/deploy/auto-deploy.sh` can keep
+# it in sync from GitHub without ever fighting a local edit.
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,6 +13,11 @@ services:
       POSTGRES_PASSWORD: ${SOLID_DB_PASSWORD:-solid}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Loopback-only by default -- nothing outside this machine can reach it. A machine that wants the
+    # database reachable elsewhere (for example, a desktop build on another computer) sets
+    # SOLID_DB_EXPOSED_BIND to that network's own address (a Tailscale IP, say) in its .env.
+    ports:
+      - "${SOLID_DB_EXPOSED_BIND:-127.0.0.1}:${SOLID_DB_EXPOSED_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U solid -d solid"]
       interval: 5s
@@ -32,9 +42,36 @@ services:
   web:
     build: ./frontend
     ports:
-      - "8080:8080"
+      - "${SOLID_WEB_PORT:-8080}:8080"
     depends_on:
       - app
+
+  # A single-process, "serverless" instance (spec 066): it serves its own web UI, needs no Caddy, and skips
+  # the bundled database in favor of whichever one SOLID_DESKTOP_DATA_DIR's remote-db.properties points at --
+  # normally the same `postgres` service above, over the network address SOLID_DB_EXPOSED_BIND publishes.
+  # `solid.desktop.home` (mounted from SOLID_DESKTOP_DATA_DIR) is not something this file can generate: see
+  # docs/desktop.md and ops/deploy/README.md for what has to be in that folder before this starts.
+  desktop:
+    build:
+      context: .
+      dockerfile: ops/desktop/Dockerfile
+    # Runs as the person who owns SOLID_DESKTOP_DATA_DIR, not the image's baked-in "solid" user, so it can
+    # actually write to a bind-mounted host folder.
+    user: "${SOLID_DESKTOP_UID:-1000}:${SOLID_DESKTOP_GID:-1000}"
+    # DesktopSetup binds to 127.0.0.1 inside the container on purpose (a desktop install is loopback-only) --
+    # host networking is what makes that the real machine's loopback instead of an unreachable one inside an
+    # isolated bridge network.
+    network_mode: host
+    environment:
+      SPRING_PROFILES_ACTIVE: desktop
+      SOLID_DESKTOP_HOME: /data
+      SOLID_DESKTOP_OPEN_BROWSER: "false"
+      SOLID_DESKTOP_PORT: ${SOLID_DESKTOP_PORT:-18081}
+    volumes:
+      - ${SOLID_DESKTOP_DATA_DIR:-./data/desktop}:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:
