@@ -9,6 +9,32 @@ export interface SystemInfo {
   name: string;
   version: string;
   databaseSchemaVersion: string;
+  desktopMode: boolean;
+}
+
+export type DatabaseSslMode = 'disable' | 'require' | 'verify-full';
+
+export interface DatabaseConnectionInput {
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password: string;
+  sslMode: DatabaseSslMode;
+}
+
+export interface DatabaseConnectionCurrent {
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password: string;
+  sslMode: DatabaseSslMode;
+}
+
+export interface DatabaseStatus {
+  mode: 'bundled' | 'remote';
+  current: DatabaseConnectionCurrent | null;
 }
 
 export interface User {
@@ -901,6 +927,14 @@ const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
 
 export const api = {
   systemInfo: () => request<SystemInfo>('/system/info'),
+  /** Desktop builds only; a server install has no endpoint here at all. */
+  desktopDatabaseStatus: () => request<DatabaseStatus>('/desktop/database'),
+  testDesktopDatabase: (input: DatabaseConnectionInput) =>
+    request<{ ok: boolean; message?: string }>('/desktop/database/test', { method: 'POST', ...json(input) }),
+  saveDesktopDatabase: (input: DatabaseConnectionInput) =>
+    request<{ saved: boolean; restartRequired: boolean }>('/desktop/database', { method: 'PUT', ...json(input) }),
+  resetDesktopDatabase: () =>
+    request<{ saved: boolean; restartRequired: boolean }>('/desktop/database', { method: 'DELETE' }),
   me: () => request<Me>('/auth/me'),
   login: (email: string, password: string) =>
     request<{ mfaEnrolled: boolean }>('/auth/login', { method: 'POST', ...json({ email, password }) }),

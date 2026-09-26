@@ -80,7 +80,7 @@ public class DesktopSetup implements EnvironmentPostProcessor {
     }
 
     /** Where one person's books live: the platform's own place for application data. */
-    static Path appDir(ConfigurableEnvironment environment) {
+    static Path appDir(org.springframework.core.env.Environment environment) {
         String configured = environment.getProperty("solid.desktop.home");
         if (configured != null && !configured.isBlank()) {
             return Path.of(configured);
@@ -128,18 +128,27 @@ public class DesktopSetup implements EnvironmentPostProcessor {
      * access list is replaced with a single entry: full control for the user running Solid, and nobody else.
      */
     private void ownerOnly(Path file) {
+        if (!ownerOnlyStatic(file)) {
+            log.warn("Could not restrict " + file + " to this user; protect the Solid folder yourself.");
+        }
+    }
+
+    /**
+     * Same restriction, usable from code that has no {@link Log} of its own (spec 066's settings screen writes
+     * its own file outside {@link DesktopSetup}'s startup path). Returns whether it worked, instead of logging.
+     */
+    static boolean ownerOnlyStatic(Path file) {
         try {
             Files.setPosixFilePermissions(file, Set.of(PosixFilePermission.OWNER_READ,
                     PosixFilePermission.OWNER_WRITE));
-            return;
+            return true;
         } catch (UnsupportedOperationException | IOException e) {
             // Not a POSIX file system: Windows. Fall through to its access list.
         }
         java.nio.file.attribute.AclFileAttributeView acl =
                 Files.getFileAttributeView(file, java.nio.file.attribute.AclFileAttributeView.class);
         if (acl == null) {
-            log.warn("Could not restrict " + file + " to this user; protect the Solid folder yourself.");
-            return;
+            return false;
         }
         try {
             java.nio.file.attribute.UserPrincipal me;
@@ -157,8 +166,9 @@ public class DesktopSetup implements EnvironmentPostProcessor {
                     .setPermissions(java.util.EnumSet.allOf(java.nio.file.attribute.AclEntryPermission.class))
                     .build();
             acl.setAcl(java.util.List.of(onlyMe));
+            return true;
         } catch (IOException | SecurityException e) {
-            log.warn("Could not restrict " + file + " to this user; protect the Solid folder yourself.");
+            return false;
         }
     }
 
@@ -194,6 +204,15 @@ public class DesktopSetup implements EnvironmentPostProcessor {
      * the master key), and the server's access rules are rewritten to demand it from every connection.
      */
     private Map<String, Object> database(Path appDir) throws IOException {
+        java.util.Optional<RemoteDatabaseConfig> remote = RemoteDatabaseConfig.load(appDir);
+        if (remote.isPresent()) {
+            RemoteDatabaseConfig config = remote.get();
+            log.info("Solid desktop: using the database server at " + config.host() + ":" + config.port()
+                    + " instead of the bundled one (set in Settings).");
+            return Map.of("spring.datasource.url", config.jdbcUrl(),
+                    "spring.datasource.username", config.username(),
+                    "spring.datasource.password", config.password());
+        }
         Path dataDir = appDir.resolve("db");
         Path hba = dataDir.resolve("pg_hba.conf");
         Secret password = secret(appDir.resolve("db.password"), "database password");
