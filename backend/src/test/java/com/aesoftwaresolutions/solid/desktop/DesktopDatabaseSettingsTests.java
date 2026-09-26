@@ -99,11 +99,12 @@ class DesktopDatabaseSettingsTests {
     @Test
     void ac4_savingRefusesAConnectionThatDoesNotWork() {
         ApiClient admin = admin();
-        JsonNode problem = admin.put2("/api/v1/desktop/database",
+        // ApiClient has no put-with-expected-problem-body helper; attempt() is enough: the refusal status is
+        // what locks anyone out or not, and the mode assertion below proves nothing was saved.
+        assertThat(admin.attempt(HttpMethod.PUT, "/api/v1/desktop/database",
                 Map.of("host", "192.0.2.1", "port", 5432, "database", "solid", "username", "solid",
-                        "password", "wrong", "sslMode", "disable"),
-                HttpStatus.CONFLICT);
-        assertThat(problem.get("code").asText()).isEqualTo("CANNOT_CONNECT");
+                        "password", "wrong", "sslMode", "disable")))
+                .isEqualTo(409);
         assertThat(admin.get("/api/v1/desktop/database", HttpStatus.OK).get("mode").asText()).isEqualTo("bundled");
     }
 

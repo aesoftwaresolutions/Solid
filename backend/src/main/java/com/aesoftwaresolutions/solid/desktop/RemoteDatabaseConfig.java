@@ -49,9 +49,11 @@ record RemoteDatabaseConfig(String host, int port, String database, String usern
 
     String jdbcUrl() {
         // A short connect timeout: a wrong host or a closed firewall port should fail in seconds, not hang the
-        // settings screen (or, at startup, hang the whole app) on the OS's own TCP timeout.
+        // settings screen (or, at startup, hang the whole app) on the OS's own TCP timeout. The socket timeout
+        // is its pair: a host that answers TCP but then stalls — a TLS handshake blackhole under sslmode=require,
+        // a firewall that drops mid-flight — bounds here instead of hanging forever.
         return "jdbc:postgresql://" + host + ":" + port + "/" + database + "?sslmode=" + sslMode.jdbcValue()
-                + "&connectTimeout=5";
+                + "&connectTimeout=5&socketTimeout=10";
     }
 
     /** Never put the real password in a response; this is what the settings screen gets back instead. */
@@ -74,7 +76,11 @@ record RemoteDatabaseConfig(String host, int port, String database, String usern
                 StandardOpenOption.WRITE)) {
             props.store(out, "Written by Solid. The password here is exactly as sensitive as db.password.");
         }
-        DesktopSetup.ownerOnlyStatic(tmp);
+        if (!DesktopSetup.ownerOnlyStatic(tmp)) {
+            // A plaintext database password must never sit on disk with default permissions; refuse instead.
+            Files.deleteIfExists(tmp);
+            throw new IOException("Could not restrict " + FILE_NAME + " to this user; refusing to save");
+        }
         Files.move(tmp, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
                 java.nio.file.StandardCopyOption.ATOMIC_MOVE);
     }

@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /** Spec 066. The file that tells {@link DesktopSetup} to skip the bundled database and use someone else's. */
@@ -22,7 +24,9 @@ class RemoteDatabaseConfigTests {
         assertThat(RemoteDatabaseConfig.load(appDir)).isEmpty();
     }
 
+    /** POSIX asserts; Windows has no POSIX permissions, same reason DesktopModeTests is Linux-only. */
     @Test
+    @EnabledOnOs(OS.LINUX)
     void savedConfigRoundTripsAndIsOwnerOnly() throws IOException {
         RemoteDatabaseConfig config = new RemoteDatabaseConfig("db.internal.example", 5433, "solid", "solid_admin",
                 "hunter2", RemoteDatabaseConfig.SslMode.VERIFY_FULL);
@@ -48,11 +52,11 @@ class RemoteDatabaseConfigTests {
     }
 
     @Test
-    void jdbcUrlHasASslModeAndAShortConnectTimeoutSoATypoFailsFastNotHangs() {
+    void jdbcUrlHasASslModeAndShortTimeoutsSoATypoFailsFastNotHangs() {
         RemoteDatabaseConfig config = new RemoteDatabaseConfig("10.0.0.5", 5432, "solid", "solid", "pw",
                 RemoteDatabaseConfig.SslMode.VERIFY_FULL);
         assertThat(config.jdbcUrl()).isEqualTo("jdbc:postgresql://10.0.0.5:5432/solid?sslmode=verify-full"
-                + "&connectTimeout=5");
+                + "&connectTimeout=5&socketTimeout=10");
     }
 
     @Test
@@ -96,7 +100,9 @@ class RemoteDatabaseConfigTests {
                 .isEqualTo(RemoteDatabaseConfig.SslMode.VERIFY_FULL);
     }
 
+    /** POSIX asserts; Windows has no POSIX permissions, same reason DesktopModeTests is Linux-only. */
     @Test
+    @EnabledOnOs(OS.LINUX)
     void useTheStaticOwnerOnlyHelperDirectlyAsNonDesktopSetupCodeMust() throws IOException {
         Path file = Files.createFile(appDir.resolve("some-file"));
         assertThat(DesktopSetup.ownerOnlyStatic(file)).isTrue();
