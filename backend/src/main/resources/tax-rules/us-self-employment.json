@@ -1,0 +1,33 @@
+{
+  "comment": "US federal self-employment tax parameters. The rates, the 92.35% factor and the $400 threshold are statute and do not drift by year; the Social Security wage base does, and is listed per year with its source. A year not listed is UNKNOWN on purpose: never carry last year's base forward.",
+  "source": "IRC sections 1401, 1402(a) and 6017; SSA contribution and benefit base history, ssa.gov/oact/cola/cbb.html, read September 2026",
+  "netEarningsFactor": "0.9235",
+  "socialSecurityRate": "0.124",
+  "medicareRate": "0.029",
+  "seFilingThresholdMinor": 40000,
+  "wageBases": [
+    {
+      "taxYear": 2024,
+      "amount": "168600.00",
+      "currency": "USD",
+      "source": "SSA 2025 COLA fact sheet, ssa.gov/news/en/cola/factsheets/2025.html: maximum taxable earnings 168,600 for 2024"
+    },
+    {
+      "taxYear": 2025,
+      "amount": "176100.00",
+      "currency": "USD",
+      "source": "SSA 2025 COLA fact sheet, ssa.gov/news/en/cola/factsheets/2025.html: maximum taxable earnings 176,100 for 2025"
+    },
+    {
+      "taxYear": 2026,
+      "amount": "184500.00",
+      "currency": "USD",
+      "source": "SSA press release 2025-10-24 and contribution-and-benefit-base page ssa.gov/oact/cola/cbb.html: maximum taxable earnings 184,500 for 2026"
+    }
+  ],
+  "notes": [
+    "Additional Medicare Tax (0.9% above household thresholds, IRC section 3101(b)(2)) is deliberately NOT computed: it depends on household income the books of one entity do not hold.",
+    "Medicare has no wage base.",
+    "Half of the SE tax is deductible above the line (IRC section 164(f)); the worksheet subtracts it before applying the person's chosen marginal rate."
+  ]
+}

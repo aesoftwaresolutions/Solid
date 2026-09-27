@@ -31,7 +31,8 @@ public class TaxFigures {
     public enum Key {
         mileage_rate_per_mile("US dollars per mile", 3),
         home_office_rate_per_square_foot("US dollars per square foot", 2),
-        form_1099_nec_threshold("US dollars", 2);
+        form_1099_nec_threshold("US dollars", 2),
+        se_wage_base("US dollars", 2);
 
         private final String unit;
         private final int scale;
