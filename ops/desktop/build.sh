@@ -34,6 +34,8 @@ rm -rf "$STAGE" "$OUT"; mkdir -p "$STAGE" "$OUT"
 cp "$JAR" "$STAGE/solid.jar"
 
 echo "==> jpackage ($TYPE)"
+# --resource-dir carries THIRD-PARTY-NOTICES into every installed copy: the bundled OpenJDK and
+# PostgreSQL binaries both require their license texts to travel with a binary distribution.
 jpackage \
   --name Solid \
   --app-version "$VERSION" \
@@ -44,6 +46,7 @@ jpackage \
   --main-class org.springframework.boot.loader.launch.JarLauncher \
   --java-options "-Dspring.profiles.active=desktop" \
   --java-options "-Xmx1g" \
+  --resource-dir "$ROOT/ops/desktop/resources" \
   --dest "$OUT" \
   --type "$TYPE" \
   $( [ "$TYPE" = "deb" ] && echo "--linux-shortcut --linux-menu-group Office" ) \

@@ -27,6 +27,8 @@ New-Item -ItemType Directory -Path $stage, $out | Out-Null
 Copy-Item $jar.FullName (Join-Path $stage "solid.jar")
 
 Write-Host "==> jpackage ($Type)"
+# --resource-dir carries THIRD-PARTY-NOTICES into every installed copy: the bundled OpenJDK and
+# PostgreSQL binaries both require their license texts to travel with a binary distribution.
 jpackage `
   --name Solid `
   --app-version $version `
@@ -37,6 +39,7 @@ jpackage `
   --main-class org.springframework.boot.loader.launch.JarLauncher `
   --java-options "-Dspring.profiles.active=desktop" `
   --java-options "-Xmx1g" `
+  --resource-dir (Join-Path $root "ops\desktop\resources") `
   --dest $out `
   --type $Type `
   --win-dir-chooser --win-menu --win-menu-group Solid --win-shortcut
