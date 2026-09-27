@@ -38,9 +38,11 @@ echo "New commit(s) on main: $CURRENT -> $LATEST"
 git checkout main --quiet
 git reset --hard origin/main
 
-# Rebuild everything and recreate only the containers whose image actually changed --
-# `up -d` after `build` does that on its own, it won't restart something that didn't change.
-docker compose build app web desktop
-docker compose up -d
+# Rebuild everything and recreate only the containers whose image actually changed -- `up -d` after `build`
+# does that on its own, it won't restart something that didn't change. No service names are hardcoded here:
+# whatever docker-compose.yml defines at this commit is what gets built, so a service being added, renamed or
+# removed between commits can't make this step fail outright the way a hardcoded list could.
+docker compose build
+docker compose up -d --remove-orphans
 
 echo "Deployed $LATEST."
