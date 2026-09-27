@@ -1,0 +1,107 @@
+/*
+  tokens.css — every color, size, shadow and timing the app uses. NOTHING ELSE goes in this file.
+
+  To re-theme Solid, change values here only. Never type a hex color, pixel shadow or animation duration
+  anywhere else: use var(--name) so one edit here changes the whole app.
+*/
+
+:root {
+  color-scheme: light;
+
+  /* Text */
+  --ink: #16202c;           /* main text */
+  --muted: #5d6b7a;         /* secondary text, labels, hints */
+
+  /* Surfaces and lines */
+  --bg: #f3f5f8;            /* page background */
+  --surface: #ffffff;       /* cards, inputs, bars */
+  --surface-raised: #fbfcfd;/* stat tiles, subtle panels */
+  --line: #dde3ea;          /* borders */
+  --line-strong: #b9c4cf;   /* borders on hover */
+  --hover: rgba(16, 24, 40, 0.05);
+
+  /* Brand */
+  --accent: #14532d;        /* buttons, active nav */
+  --accent-hover: #0d4023;
+  --accent-soft: #e6f2ea;   /* active nav background, focus glow */
+  --accent-ink: #ffffff;    /* text on --accent */
+  --link: #14532d;
+
+  /* Messages */
+  --danger: #9f1239;
+  --danger-bg: #fff1f2;
+  --danger-border: #fecdd3;
+  --notice-ink: #065f46;
+  --notice-bg: #ecfdf5;
+  --notice-border: #a7f3d0;
+
+  --code-bg: #eef2f6;
+  --skeleton: #e6ebf1;      /* loading placeholder base */
+  --skeleton-shine: #f4f6f9;/* loading placeholder highlight */
+  --backdrop: rgba(10, 16, 24, 0.4);
+
+  /* Shape */
+  --radius: 12px;
+  --radius-control: 8px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 2px 6px rgba(16, 24, 40, 0.05);
+  --shadow-lift: 0 4px 10px rgba(16, 24, 40, 0.08), 0 12px 24px rgba(16, 24, 40, 0.06);
+
+  /* Layout */
+  --topbar-height: 56px;
+  --sidebar-width: 232px;
+  --content-width: 1000px;
+
+  /* Motion — durations and curves for every animation and transition */
+  --dur-fast: 120ms;        /* hovers, presses */
+  --dur-base: 220ms;        /* menus, alerts */
+  --dur-slow: 380ms;        /* page and card entrances */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --stagger: 45ms;          /* delay between cards appearing one after another */
+
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+/* Dark mode: the same names, different values. Add a new token above? Add its dark value here too. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #e4eaf1;
+    --muted: #95a3b3;
+    --bg: #0e141a;
+    --surface: #172029;
+    --surface-raised: #1b252f;
+    --line: #2c3a48;
+    --line-strong: #455769;
+    --hover: rgba(255, 255, 255, 0.06);
+    --accent: #1f6b43;
+    --accent-hover: #2a8354;
+    --accent-soft: #1b3326;
+    --accent-ink: #ffffff;
+    --link: #7bc79a;
+    --danger: #fda4af;
+    --danger-bg: #351720;
+    --danger-border: #5c2333;
+    --notice-ink: #6ee7b7;
+    --notice-bg: #122c22;
+    --notice-border: #1d5c42;
+    --code-bg: #232d38;
+    --skeleton: #222d38;
+    --skeleton-shine: #2c3947;
+    --backdrop: rgba(0, 0, 0, 0.55);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-lift: 0 6px 14px rgba(0, 0, 0, 0.4), 0 14px 28px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* People who ask their computer for less motion get almost none. Every animation reads these tokens. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 1ms;
+    --dur-base: 1ms;
+    --dur-slow: 1ms;
+    --stagger: 0ms;
+  }
+}
