@@ -36,8 +36,8 @@ test that failed before the fix.
 
 - **Linking a document to a record does not check the record exists** (`doc.document_link.object_id`). Fixing it
   means the documents module has to ask four other modules, which is a design choice about module boundaries.
-- **lightningcss (MPL-2.0)** reaches the build through Vite. Nothing of it ships, but MPL-2.0 is not on the list in
-  CLAUDE.md. Allow it for build-only tools, or replace it.
+- **lightningcss (MPL-2.0)** reaches the build through Vite. Nothing of it ships, but MPL-2.0 is not on the
+  project's licence policy list. Allow it for build-only tools, or replace it.
 - **Reversing any entry whose lines are already reconciled.** Fix 6 covers the bank screen; reversals from the
   journal, invoice void and so on still can. The general fix is a ledger-level hook, which is a design decision.
 
@@ -47,8 +47,8 @@ test that failed before the fix.
 - **The licence rule and the licence check disagree with the build as it stands.** The check matches licence
   names exactly, so it passes "LGPL-2.1-only" and "GPL2 w/ CPE". Two Spring Boot essentials are already in:
   Logback (EPL-2.0 *or* LGPL-2.1) and Jakarta Annotations (EPL-2.0 *or* GPL-2.0 with the Classpath Exception).
-  Both are usable under EPL-2.0, which is weak copyleft and not on the list in CLAUDE.md. Blocking the
-  SPDX names outright fails the build on these two, because the plugin cannot express "dual-licensed, one
+  Both are usable under EPL-2.0, which is weak copyleft and not on the project's licence policy list. Blocking
+  the SPDX names outright fails the build on these two, because the plugin cannot express "dual-licensed, one
   option acceptable". Decide whether EPL-2.0 joins the list; the check can then be rewritten as an allow-list.
 
 ## Acceptance criteria

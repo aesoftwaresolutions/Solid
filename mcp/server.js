@@ -2,8 +2,8 @@
 /**
  * Solid MCP server — exposes the Solid bookkeeping API to local LLM agents.
  *
- * Stdio transport; point any MCP client (Claude Desktop, an Ollama-driven agent,
- * Cursor, etc.) at this process. Configuration is environment variables:
+ * Stdio transport; point any MCP-compatible client or agent host at this process.
+ * Configuration is environment variables:
  *
  *   SOLID_URL        e.g. http://localhost:8080  (server) or http://127.0.0.1:18080 (desktop)
  *   SOLID_EMAIL

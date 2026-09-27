@@ -30,7 +30,9 @@ administrator's. Every action it takes lands in the audit log under that identit
 
 ## Wiring it into a client
 
-Claude Desktop (`claude_desktop_config.json`):
+Any MCP host that can spawn a stdio process works — point it at `node server.js`
+with the variables above. For a desktop-style client the configuration block is
+the usual shape:
 
 ```json
 {
@@ -49,9 +51,9 @@ Claude Desktop (`claude_desktop_config.json`):
 }
 ```
 
-The same stdio shape works for Ollama-based agents (via an MCP client bridge),
-Cursor, or any MCP host. Transport is stdio only; there is no network listener,
-which matches the desktop install's loopback-only posture.
+The same stdio shape works for Ollama-based agents (via an MCP client bridge) or
+any MCP host. Transport is stdio only; there is no network listener, which matches
+the desktop install's loopback-only posture.
 
 ## Tool inventory
 
