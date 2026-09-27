@@ -6,6 +6,16 @@ built by **AE Software Solutions**.
 > **Status:** The books are built and tested. Tax *preparation* is not: Solid keeps the books, maps them to
 > tax lines and hands your preparer a clean report. Nothing here is tax advice.
 
+## Screenshots
+
+![The dashboard: this year's income, expenses and profit, what still needs attention, and money owed both ways](docs/screenshots/dashboard.png)
+
+| Dark mode | On a phone |
+|---|---|
+| ![The same dashboard in dark mode](docs/screenshots/dashboard-dark.png) | ![The menu opened as a slide-out drawer on a phone](docs/screenshots/mobile-menu.png) |
+
+*Sample data. Dark mode follows the computer's own setting; below 900px wide the menu becomes a slide-out drawer.*
+
 ## What works today
 
 Sign in (with two-factor), create an organization and its entities, and:
