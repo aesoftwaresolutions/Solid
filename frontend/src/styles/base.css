@@ -1,0 +1,224 @@
+/*
+  base.css — how plain HTML elements look: text, links, tables, form fields, buttons.
+  No class names here (except button.secondary). Page layout lives in layout.css, named pieces in components.css.
+*/
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  font-size: 1.55rem;
+  letter-spacing: -0.015em;
+  margin: 4px 0 20px;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+h3 {
+  font-size: 0.98rem;
+  margin: 16px 0 8px;
+}
+
+a {
+  color: var(--link);
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 2px;
+  transition: text-decoration-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+
+a:hover {
+  text-decoration-color: currentColor;
+}
+
+code {
+  background: var(--code-bg);
+  padding: 2px 5px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* ---------- Tables ---------- */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+th {
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 2px solid var(--line);
+}
+
+td {
+  border-bottom: 1px solid var(--line);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 9px 10px;
+  vertical-align: top;
+}
+
+tbody tr {
+  transition: background-color var(--dur-fast) ease;
+}
+
+tbody tr:hover {
+  background: var(--hover);
+}
+
+/* Money lines up on the decimal point. */
+th.money,
+td.money {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Form fields ---------- */
+
+label {
+  display: block;
+  margin-bottom: 14px;
+  font-weight: 500;
+}
+
+/* The control sits on its own line under the words that name it, so every field starts in the same place. */
+label > input:not([type="checkbox"]):not([type="radio"]),
+label > select,
+label > textarea {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin-top: 5px;
+  font-weight: 400;
+}
+
+/* A tick box belongs beside its words, not above them. */
+label > input[type="checkbox"],
+label > input[type="radio"] {
+  margin-right: 8px;
+  accent-color: var(--accent);
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  max-width: 100%;
+}
+
+input,
+select,
+textarea {
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-base) var(--ease-out);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+/* ---------- Buttons ---------- */
+
+button {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  font-weight: 500;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease,
+    transform var(--dur-fast) var(--ease-out);
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  box-shadow: var(--shadow);
+}
+
+/* A small squeeze on press: the button answers the click before the server does. */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+button.secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+button.secondary:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--line-strong);
+  box-shadow: none;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Keyboard travel needs a marker; mice get hover and press feedback instead. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  table {
+    font-size: 0.85rem;
+  }
+}

@@ -1,4 +1,5 @@
-import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, Navigate, Route, Routes, useLocation, useMatch } from 'react-router-dom';
 import { useAuth } from './auth';
 import { Loading } from './components';
 import AcceptInvitationPage from './pages/AcceptInvitationPage';
@@ -24,78 +25,88 @@ import ReportsPage from './pages/ReportsPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SalesPage from './pages/SalesPage';
 import SearchPage from './pages/SearchPage';
+import { Icon } from './ui/icons';
+import { Sidebar } from './ui/Sidebar';
 
-function EntityNav() {
-  const { orgId, entityId } = useParams();
-  if (!orgId || !entityId) {
-    return null;
-  }
-  const base = `/orgs/${orgId}/entities/${entityId}`;
-  return (
-    <>
-      <Link to={base}>Dashboard</Link>
-      <Link to={`${base}/accounts`}>Accounts</Link>
-      <Link to={`${base}/bank`}>Bank</Link>
-      <Link to={`${base}/reconcile`}>Reconcile</Link>
-      <Link to={`${base}/journal`}>Journal</Link>
-      <Link to={`${base}/sales`}>Sales</Link>
-      <Link to={`${base}/purchases`}>Purchases</Link>
-      <Link to={`${base}/documents`}>Documents</Link>
-      <Link to={`${base}/assets`}>Assets</Link>
-      <Link to={`${base}/deductions`}>Deductions</Link>
-      <Link to={`${base}/budget`}>Budget</Link>
-      <Link to={`${base}/reports`}>Reports</Link>
-      <Link to={`${base}/import`}>Import</Link>
-      <Link to={`${base}/search`}>Search</Link>
-      <Link to={`${base}/settings`}>Settings</Link>
-    </>
-  );
-}
-
+/**
+ * The frame around every signed-in page: the top bar, and — inside an entity — the sidebar menu.
+ * The pages themselves are listed in the <Routes> below; the sidebar's links are in src/ui/navigation.ts.
+ */
 function Shell() {
   const { state, logout } = useAuth();
   const email = state.status === 'ready' ? state.me.user.email : '';
+  const location = useLocation();
+  const entity = useMatch('/orgs/:orgId/entities/:entityId/*');
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // On a phone the menu is a drawer: close it once a page is picked, or when Escape is pressed.
+  useEffect(() => setMenuOpen(false), [location.pathname]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && setMenuOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <>
-      <nav className="top">
-        <Link to="/">
-          <strong>Solid</strong>
+      <header className="topbar">
+        {entity && (
+          <button
+            type="button"
+            className="secondary menu-button"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            aria-controls="sidebar"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <Icon name={menuOpen ? 'close' : 'menu'} size={20} />
+          </button>
+        )}
+        <Link to="/" className="brand">
+          <span className="brand-mark" aria-hidden="true" />
+          Solid
         </Link>
-        <Routes>
-          <Route path="/orgs/:orgId/entities/:entityId/*" element={<EntityNav />} />
-          <Route path="*" element={null} />
-        </Routes>
         <span className="spacer" />
-        <Link to="/account" className="muted">
+        <Link to="/account" className="who">
           {email}
         </Link>
         <button type="button" className="secondary" onClick={() => void logout()}>
           Sign out
         </button>
-      </nav>
-      <Routes>
-        <Route path="/" element={<OrganizationsPage />} />
-        <Route path="/account" element={<AccountPage />} />
-        <Route path="/instance" element={<InstancePage />} />
-        <Route path="/orgs/:orgId" element={<EntitiesPage />} />
-        <Route path="/orgs/:orgId/settings" element={<OrganizationPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId" element={<DashboardPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/accounts" element={<AccountsPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/bank" element={<BankPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/reconcile" element={<ReconcilePage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/journal" element={<JournalPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/assets" element={<AssetsPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/deductions" element={<DeductionsPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/budget" element={<BudgetPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/sales" element={<SalesPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/purchases" element={<PurchasesPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/documents" element={<DocumentsPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/reports" element={<ReportsPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/import" element={<ImportPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/search" element={<SearchPage />} />
-        <Route path="/orgs/:orgId/entities/:entityId/settings" element={<EntitySettingsPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      </header>
+      <div className="app-body">
+        {entity && (
+          <>
+            <Sidebar orgId={entity.params.orgId ?? ''} entityId={entity.params.entityId ?? ''} open={menuOpen} />
+            <div className={menuOpen ? 'backdrop visible' : 'backdrop'} onClick={() => setMenuOpen(false)} />
+          </>
+        )}
+        <div className="content">
+          <Routes>
+            <Route path="/" element={<OrganizationsPage />} />
+            <Route path="/account" element={<AccountPage />} />
+            <Route path="/instance" element={<InstancePage />} />
+            <Route path="/orgs/:orgId" element={<EntitiesPage />} />
+            <Route path="/orgs/:orgId/settings" element={<OrganizationPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId" element={<DashboardPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/accounts" element={<AccountsPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/bank" element={<BankPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/reconcile" element={<ReconcilePage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/journal" element={<JournalPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/assets" element={<AssetsPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/deductions" element={<DeductionsPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/budget" element={<BudgetPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/sales" element={<SalesPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/purchases" element={<PurchasesPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/documents" element={<DocumentsPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/reports" element={<ReportsPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/import" element={<ImportPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/search" element={<SearchPage />} />
+            <Route path="/orgs/:orgId/entities/:entityId/settings" element={<EntitySettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
+      </div>
     </>
   );
 }

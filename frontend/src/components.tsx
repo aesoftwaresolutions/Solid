@@ -15,8 +15,19 @@ export function ErrorMessage({ error }: { error: unknown }) {
   );
 }
 
+/**
+ * Shown while something is on its way from the server: three shimmering grey lines where the content will be.
+ * The words are still there for screen readers, just not drawn.
+ */
 export function Loading({ what }: { what: string }) {
-  return <p aria-live="polite">Loading {what}…</p>;
+  return (
+    <div className="skeleton-group" role="status" aria-live="polite">
+      <span className="visually-hidden">Loading {what}…</span>
+      <div className="skeleton" />
+      <div className="skeleton" />
+      <div className="skeleton" />
+    </div>
+  );
 }
 
 /** Runs an async loader and renders one of loading / error / content. */

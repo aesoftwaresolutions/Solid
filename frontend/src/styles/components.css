@@ -1,0 +1,162 @@
+/*
+  components.css — the named building blocks pages use. The complete list of classes a page may use:
+
+    .card  .card-header     a white panel with a title       (use the <Card> component)
+    .stats  .stat  .value   a row of number tiles
+    .error                  a red message                    (use the <ErrorMessage> component)
+    .notice                 a green "done" message
+    .muted                  grey secondary text
+    .money                  on a <td>/<th>: right-aligned amounts
+    .secondary              on a <button>: the plain, non-green button
+    .visually-hidden        text for screen readers only
+    .skeleton               grey shimmering placeholder      (use the <Loading> component)
+
+  Need something new? Add it here with a comment, and add it to the list above and to frontend/UI-GUIDE.md.
+*/
+
+/* ---------- Card ---------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  margin-bottom: 20px;
+  overflow-x: auto; /* a wide table scrolls inside its card instead of breaking the page */
+}
+
+.card-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+/* The card's padding already spaces its last line from the edge; a paragraph or list margin would double it. */
+.card > :last-child {
+  margin-bottom: 0;
+}
+
+/* A heading inside a card needs air under it, or the first field looks stuck to it. */
+.card > h2 {
+  margin-bottom: 14px;
+}
+
+/* ---------- Number tiles ---------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.stat {
+  position: relative;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: 14px 16px;
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-fast) ease;
+}
+
+/* A thin green line along the top edge that fills in on hover. */
+.stat::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.stat:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+  border-color: var(--line-strong);
+}
+
+.stat:hover::after {
+  transform: scaleX(1);
+}
+
+.stat .value {
+  font-size: 1.5rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+  margin: 2px 0 4px;
+}
+
+/* ---------- Messages ---------- */
+
+.error,
+.notice {
+  border: 1px solid;
+  border-left-width: 4px;
+  border-radius: var(--radius-control);
+  padding: 10px 14px;
+}
+
+.error {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  border-left-color: var(--danger);
+}
+
+.notice {
+  color: var(--notice-ink);
+  background: var(--notice-bg);
+  border-color: var(--notice-border);
+  border-left-color: var(--notice-ink);
+}
+
+/* ---------- Small helpers ---------- */
+
+.muted {
+  color: var(--muted);
+}
+
+.right {
+  text-align: right;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Loading placeholder ---------- */
+
+.skeleton-group {
+  display: grid;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.skeleton {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--skeleton) 0%, var(--skeleton-shine) 50%, var(--skeleton) 100%);
+  background-size: 200% 100%;
+}
+
+/* Lines of different lengths read as "text is coming", not as a broken box. */
+.skeleton:nth-of-type(1) { width: 92%; }
+.skeleton:nth-of-type(2) { width: 76%; }
+.skeleton:nth-of-type(3) { width: 58%; }

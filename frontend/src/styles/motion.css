@@ -1,0 +1,127 @@
+/*
+  motion.css — every animation in the app, in one place.
+
+  Rules:
+  - Timings come from tokens.css (--dur-fast, --dur-base, --dur-slow, --ease-out, --stagger). Never type
+    a raw "300ms" here; change the token instead.
+  - Animate only opacity and transform. They are cheap for the browser; animating width, height, top or
+    margin makes pages stutter.
+  - Entrances play once, when an element first appears. Nothing loops except the loading shimmer.
+  - Someone whose computer asks for reduced motion gets none (tokens.css shortens every duration, and the
+    block at the bottom switches off the two animations that loop or shake).
+
+  Hovers and presses are transitions, not animations, and sit next to the element they belong to
+  (base.css, layout.css, components.css).
+*/
+
+/* ---------- Keyframes: the named movements ---------- */
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes nudge {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* ---------- Where they are used ---------- */
+
+/* A new page: its heading and cards rise in one after another, top to bottom. */
+main > * {
+  animation: rise-in var(--dur-slow) var(--ease-out) both;
+}
+
+main > :nth-child(2) { animation-delay: calc(var(--stagger) * 1); }
+main > :nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+main > :nth-child(4) { animation-delay: calc(var(--stagger) * 3); }
+main > :nth-child(5) { animation-delay: calc(var(--stagger) * 4); }
+main > :nth-child(6) { animation-delay: calc(var(--stagger) * 5); }
+main > :nth-child(n + 7) { animation-delay: calc(var(--stagger) * 6); }
+
+/* Number tiles pop in, one after another. */
+.stat {
+  animation: pop-in var(--dur-slow) var(--ease-out) both;
+}
+
+.stat:nth-child(2) { animation-delay: calc(var(--stagger) * 1); }
+.stat:nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+.stat:nth-child(n + 4) { animation-delay: calc(var(--stagger) * 3); }
+
+/* Table rows fade in as data arrives (and when a new row is added). */
+tbody tr {
+  animation: fade-in var(--dur-base) ease both;
+}
+
+/* Messages slide down into place; an error also gives a small sideways nudge to catch the eye. */
+.notice {
+  animation: slide-down var(--dur-base) var(--ease-out) both;
+}
+
+.error {
+  animation:
+    slide-down var(--dur-base) var(--ease-out) both,
+    nudge 280ms var(--ease-in-out) var(--dur-base) 1;
+}
+
+/* Loading placeholders shimmer until the real content replaces them. */
+.skeleton {
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .error {
+    animation: none;
+  }
+}
