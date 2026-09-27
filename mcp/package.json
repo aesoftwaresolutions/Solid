@@ -1,0 +1,17 @@
+{
+  "name": "solid-mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for the Solid bookkeeping platform — lets local LLM agents read the books and perform safe write operations.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "zod": "^3.24.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

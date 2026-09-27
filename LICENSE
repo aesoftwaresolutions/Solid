@@ -1,0 +1,46 @@
+SOLID — PROPRIETARY LICENSE
+
+Copyright (c) 2026 AE Software Solutions. All rights reserved.
+
+1. OWNERSHIP. Solid, including all source code, installers, documentation, and
+   assets in this repository, is the property of AE Software Solutions
+   ("the Licensor"). No ownership is transferred by access, download, or purchase.
+
+2. LICENSED USE. A person or organization that has purchased a license from the
+   Licensor ("the Licensee") may install and run Solid for its own internal
+   bookkeeping, on servers and desktop computers under its control, for the number
+   of instances its purchase covers.
+
+3. RESTRICTIONS. Except with the Licensor's prior written permission, no one may:
+   (a) copy, redistribute, publish, sell, rent, lease, or sublicense Solid, in
+   whole or in part, to any third party;
+   (b) offer Solid as a hosted or managed service to third parties;
+   (c) remove or alter any copyright, license, or attribution notice;
+   (d) reverse engineer Solid except where applicable law grants that right
+   notwithstanding this restriction.
+
+4. THIRD-PARTY COMPONENTS. Solid bundles and links open-source components governed
+   by their own licenses. Those components remain under their own terms; see
+   THIRD-PARTY-NOTICES.txt (in the repository at ops/desktop/resources/ and inside
+   every installed copy). Nothing in this license restricts rights those licenses
+   grant to those components alone.
+
+5. NO TAX ADVICE. Solid computes and organizes figures from data entered into it;
+   it does not provide tax, accounting, or legal advice. The Licensee is
+   responsible for the accuracy of its own books and for filings prepared from them.
+
+6. DISCLAIMER. Except as required by applicable law, Solid is provided "AS IS",
+   without warranty of any kind, express or implied, including but not limited to
+   warranties of merchantability, fitness for a particular purpose, and
+   noninfringement.
+
+7. LIMITATION OF LIABILITY. To the maximum extent permitted by law, the Licensor's
+   total liability arising out of or relating to Solid shall not exceed the amount
+   the Licensee paid for the license in the twelve months preceding the claim, and
+   the Licensor is not liable for indirect, incidental, special, consequential, or
+   punitive damages, including lost profits or lost data.
+
+8. TERMINATION. This license terminates automatically upon breach of its terms.
+   On termination the Licensee must stop use and destroy copies, except that data
+   created with Solid remains the Licensee's property and readable exports made
+   with Solid's export features may be kept.
