@@ -1,21 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
     <version>3.5.16</version>
     <relativePath/>
   </parent>
-
   <groupId>com.aesoftwaresolutions</groupId>
   <artifactId>solid</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <name>Solid</name>
   <description>Self-hosted business and personal accounting with US tax</description>
-
   <properties>
     <java.version>21</java.version>
     <spring-modulith.version>1.4.13</spring-modulith.version>
@@ -29,7 +25,6 @@
     <embedded-postgres.version>2.1.0</embedded-postgres.version>
     <embedded-postgres-binaries.version>16.2.0</embedded-postgres-binaries.version>
   </properties>
-
   <dependencyManagement>
     <dependencies>
       <dependency>
@@ -41,7 +36,6 @@
       </dependency>
     </dependencies>
   </dependencyManagement>
-
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -111,7 +105,6 @@
       <artifactId>bcprov-jdk18on</artifactId>
       <version>${bouncycastle.version}</version>
     </dependency>
-
     <!-- Test -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -129,7 +122,7 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.testcontainers</groupId>
+      <groupId>org.testcontainers</groupId</groupId>
       <artifactId>junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
@@ -159,7 +152,6 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
-
   <build>
     <plugins>
       <plugin>
@@ -173,7 +165,6 @@
       </plugin>
     </plugins>
   </build>
-
   <profiles>
     <!-- Any desktop build (-Ddesktop.os=...) also serves the web UI from inside the jar, because there is no
          Caddy on a laptop. The frontend must have been built first: ops/desktop/build.sh does that. -->
@@ -249,7 +240,9 @@
       </dependencies>
     </profile>
 
-    <!-- mvn -Plicense-check verify : fails the build if a GPL/AGPL dependency is present -->
+    <!-- mvn -Plicense-check verify : fails the build if a GPL/AGPL/LGPL dependency is present. The policy
+         rationale and its known open question (dual-licensed EPL-2.0 jars that slip through exact-name
+         matching) are in docs/specs/065-fourth-review-fixes.md. -->
     <profile>
       <id>license-check</id>
       <build>
@@ -275,7 +268,7 @@
                     <excludedLicense>GPL-2.0</excludedLicense>
                     <excludedLicense>GPL-3.0</excludedLicense>
                     <excludedLicense>AGPL-3.0</excludedLicense>
-                    <!-- Spec 065, row 17: the rule in CLAUDE.md is permissive licences only, LGPL included. -->
+                    <!-- Spec 065, row 17: the project's licence policy is permissive licences only. -->
                     <excludedLicense>GNU Lesser General Public License</excludedLicense>
                     <excludedLicense>LGPL</excludedLicense>
                     <excludedLicense>LGPL-2.1</excludedLicense>
