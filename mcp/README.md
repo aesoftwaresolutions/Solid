@@ -2,9 +2,9 @@
 
 Lets a local LLM agent manage Solid through the Model Context Protocol. The agent
 gets read access to the books (organizations, accounts, review queue, all reports,
-backup status) and a deliberately small set of writes (categorize a bank transaction,
-create a journal entry, create a customer). Destructive operations — delete, void,
-reset — are not exposed at all.
+backup status, the estimated-tax worksheet) and a deliberately small set of writes
+(categorize a bank transaction, create a journal entry, create a customer).
+Destructive operations — delete, void, reset — are not exposed at all.
 
 Nothing in the Solid app changes; this talks to the same REST API the web UI uses,
 with the same session cookie and CSRF rules.
@@ -63,7 +63,7 @@ the desktop install's loopback-only posture.
 | `solid_login_status` | none |
 | `solid_list_organizations` / `solid_list_entities` / `solid_list_accounts` | none |
 | `solid_review_queue` | none |
-| `solid_profit_and_loss` / `solid_balance_sheet` / `solid_tax_lines` | none |
+| `solid_profit_and_loss` / `solid_balance_sheet` / `solid_tax_lines` / `solid_estimated_tax` | none |
 | `solid_backup_status` | none |
 | `solid_list_customers` | none |
 | `solid_categorize_transaction` | posts a journal entry (this is the point of the queue) |
@@ -79,6 +79,9 @@ on failure, so the agent can read and react to e.g. `TRANSACTION_RECONCILED`.
   `solid_list_organizations`, drill down.
 - Money is `{ "amount": "1200.00", "currency": "USD" }` — strings, never floats,
   matching the API's own rule.
+- `solid_estimated_tax` is a worksheet, not advice: SE tax comes from statute and
+  the sourced wage base; the income-tax leg exists only if the caller passes
+  `marginalRatePercent`. The response's `notes` say what is excluded.
 - Journal-entry amounts: positive = debit, negative = credit, lines must net to
   zero or the API refuses it (`BusinessRuleException` surfaces as a 4xx with a code).
 - The session auto-refreshes on a 401, so long-running agents do not stall on an

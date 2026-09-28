@@ -186,6 +186,20 @@ server.registerTool('solid_tax_lines', {
 }, async ({ orgId, entityId, taxYear }) =>
   fmt(await authed(() => call('GET', `/orgs/${orgId}/entities/${entityId}/reports/tax-lines?taxYear=${taxYear}`))));
 
+server.registerTool('solid_estimated_tax', {
+  description: 'Quarterly set-aside worksheet: self-employment tax from the books\u2019 profit at statute rates plus the sourced wage base, plus an income-tax leg at a rate the caller supplies. An estimate for setting money aside, not a return.',
+  inputSchema: {
+    ...orgEntity,
+    taxYear: z.number().int(),
+    marginalRatePercent: z.number().min(0).max(100).optional()
+      .describe('Caller-chosen marginal income-tax rate; omit for SE-tax-only worksheet'),
+  },
+}, async ({ orgId, entityId, taxYear, marginalRatePercent }) => {
+  const query = marginalRatePercent === undefined ? '' : `&marginalRatePercent=${marginalRatePercent}`;
+  return fmt(await authed(() =>
+    call('GET', `/orgs/${orgId}/entities/${entityId}/reports/estimated-tax?taxYear=${taxYear}${query}`)));
+});
+
 server.registerTool('solid_backup_status', {
   description: 'Backup readiness for this installation (instance-admin accounts only).',
   inputSchema: {},

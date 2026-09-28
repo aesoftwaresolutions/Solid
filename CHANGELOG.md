@@ -6,13 +6,21 @@ The format follows keepachangelog.com; versions use semver.
 ## [Unreleased]
 
 ### Added
+- Slice 067: quarterly estimated-tax set-aside worksheet
+  (`GET .../reports/estimated-tax?taxYear=YYYY[&marginalRatePercent=NN]`). SE tax from statute and the
+  sourced wage base (runtime-overridable via a new `se_wage_base` tax figure); the income-tax leg exists only
+  at the caller's own supplied marginal rate. A year with no wage base on file is reported as unknown, never
+  carried forward.
 - SECURITY.md with a vulnerability-reporting channel.
 - Third-party license notices bundled with every desktop installer.
+- MCP server (`mcp/`) so a local LLM agent can read the books and perform a small set of safe writes.
 
 ### Fixed
-- Desktop remote-database slice: POSIX file tests now run on their intended OS only;
-  a test referenced a helper that did not exist; remote connections now carry a socket
-  timeout so a stalled server fails fast instead of hanging startup.
+- Desktop remote-database slice: POSIX file tests now run on their intended OS only; a test referenced a
+  helper that did not exist; remote connections now carry a socket timeout so a stalled server fails fast
+  instead of hanging startup.
+- pom.xml: malformed XML repaired; the last vendored-tooling reference removed from build comments.
+- Stylesheet: the missing `.visually-hidden` rule restored (labels in the bank review queue had been rendering).
 
 ## [0.1.0] - 2026-09-26
 
