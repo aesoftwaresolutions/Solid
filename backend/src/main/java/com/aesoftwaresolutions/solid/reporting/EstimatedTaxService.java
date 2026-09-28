@@ -17,17 +17,19 @@ import java.util.UUID;
 import org.springframework.core.io.ClassPathResource;
 
 /**
- * The self-employment-tax arithmetic behind the quarterly set-aside worksheet (spec 067).
+ * The quarterly set-aside worksheet (spec 067), shaped the way a person reads it: an ordered list of
+ * worksheet lines, like Form 1040-ES, where every line names itself, shows the arithmetic that produced its
+ * amount, and says nothing else. The headline answer — what to set aside this quarter — is one field at the
+ * top; the steps are the audit trail under it.
  *
  * <p>What never changes by year — the 92.35% net-earnings factor, the 12.4% Social Security rate, the 2.9%
  * Medicare rate and the $400 filing threshold — is statute (IRC §1401, §1402, §6017), so it lives in the
  * rule file with its source. What does change every year — the Social Security wage base — is looked up per
  * tax year: a runtime-supplied figure (spec 049) wins, then the shipped file, then <em>unknown</em>, and the
- * worksheet says so rather than reusing last year's number.
+ * worksheet says so instead of carrying last year's number forward.
  *
- * <p>This is an estimate for setting money aside. It is not filed with anyone: it does not model the
- * Additional Medicare Tax (which needs household income Solid does not have), itemized deductions, the QBI
- * deduction or state tax. The worksheet says all of that in words next to the numbers.
+ * <p>This is an estimate for setting money aside, not a return and not advice: it does not model the
+ * Additional Medicare Tax (which needs household income), itemized deductions, QBI, or state tax.
  */
 @org.springframework.stereotype.Service
 public class EstimatedTaxService {
@@ -36,12 +38,12 @@ public class EstimatedTaxService {
     private final TaxLineReportService taxLines;
     private final TaxFigures figures;
 
-    /** The part of the rule file that never changes by year, loaded once. */
     private final BigDecimal netEarningsFactor;
     private final BigDecimal socialSecurityRate;
     private final BigDecimal medicareRate;
     private final BigDecimal halfFactor = new BigDecimal("0.5");
-    private final String constantsSource;
+    private final BigDecimal quarterFactor = new BigDecimal("0.25");
+    private final String source;
     private final long filingThresholdMinor;
     private final List<WageBase> wageBases = new ArrayList<>();
 
@@ -56,7 +58,7 @@ public class EstimatedTaxService {
         this.netEarningsFactor = new BigDecimal(root.get("netEarningsFactor").asText());
         this.socialSecurityRate = new BigDecimal(root.get("socialSecurityRate").asText());
         this.medicareRate = new BigDecimal(root.get("medicareRate").asText());
-        this.constantsSource = root.get("source").asText();
+        this.source = root.get("source").asText();
         this.filingThresholdMinor = root.get("seFilingThresholdMinor").asLong();
         for (JsonNode entry : root.get("wageBases")) {
             wageBases.add(new WageBase(entry.get("taxYear").asInt(),
@@ -73,19 +75,25 @@ public class EstimatedTaxService {
         }
     }
 
-    public record Result(int taxYear, String currency,
-                         Money netProfit, Money netSelfEmploymentEarnings, boolean seTaxApplies,
-                         Money socialSecurityPart, Money medicarePart, Money selfEmploymentTax,
-                         Money deductibleHalfOfSeTax, Money wageBase, boolean wageBaseKnown,
-                         String wageBaseSource, Money incomeTaxEstimate, BigDecimal marginalRatePercent,
-                         boolean incomeTaxEstimated, Money annualSetAside, Money quarterlyPayment,
-                         List<String> quarterlyDueDates, List<String> notes) {
+    /**
+     * One line of the worksheet. {@code amount} is null for narrative lines ("nothing due"); {@code note}
+     * carries the plain-language arithmetic — "2,000.00 × 92.35%" — so nobody has to take a number on faith.
+     */
+    public record Step(int line, String label, Money amount, String note) {
+    }
+
+    public record Result(int taxYear, String currency, List<Step> steps,
+                         Money selfEmploymentTax, Money incomeTaxEstimate, boolean incomeTaxIncluded,
+                         BigDecimal marginalRatePercent, Money annualSetAside, Money quarterlyPayment,
+                         boolean wageBaseKnown, String wageBaseSource,
+                         List<String> quarterlyDueDates, List<String> caveats) {
     }
 
     /**
-     * @param marginalRatePercent the person's chosen marginal income-tax rate. Null means "no income-tax leg" —
-     *                            Solid never supplies a rate itself, because the honest rate depends on the rest
-     *                            of the household's income, which the books of one entity cannot know.
+     * @param marginalRatePercent the person's chosen marginal income-tax rate. Null means "worksheet stops
+     *                            at self-employment tax" — Solid never supplies a rate itself, because the
+     *                            honest rate depends on the rest of the household's income, which the books
+     *                            of one entity cannot know.
      */
     public Result worksheet(UUID orgId, UUID entityId, int taxYear, BigDecimal marginalRatePercent) {
         if (marginalRatePercent != null
@@ -95,29 +103,48 @@ public class EstimatedTaxService {
         }
         LegalEntity entity = orgs.getEntity(orgId, entityId);
         String ccy = entity.baseCurrency();
-        TaxLineReport report = taxLines.report(orgId, entityId, taxYear);
-        Money netProfit = report.totals().netProfit();
-        List<String> notes = new ArrayList<>();
+        Money netProfit = taxLines.report(orgId, entityId, taxYear).totals().netProfit();
 
-        // Schedule SE: only 92.35% of net profit is self-employment earnings (§1402(a)).
-        Money seEarnings = netProfit.isPositive()
-                ? netProfit.multiply(netEarningsFactor, RoundingMode.HALF_UP)
-                : Money.zero(ccy);
-        boolean seApplies = seEarnings.minorUnits() >= filingThresholdMinor;
-        if (!seApplies) {
-            notes.add("Net self-employment earnings are under the $400 filing threshold (IRC §6017), so no "
-                    + "self-employment tax is due.");
+        List<Step> steps = new ArrayList<>();
+        List<String> caveats = new ArrayList<>();
+        caveats.add("Not included: the Additional Medicare Tax (0.9% over household thresholds), the QBI "
+                + "deduction, itemized deductions, and state tax — all of which need information the entity's "
+                + "books do not have.");
+        caveats.add("Rates and rules: " + source);
+        int line = 1;
+        Money zero = Money.zero(ccy);
+
+        // 1. Start from the books.
+        steps.add(new Step(line++, "Net profit this year, from your books", netProfit,
+                "Your posted income minus your posted expenses for " + taxYear + "."));
+
+        if (!netProfit.isPositive()) {
+            steps.add(new Step(line, "Nothing to set aside for self-employment tax", zero,
+                    "No profit, no self-employment tax. If this is still early in the year, look again "
+                            + "after a few more sales."));
+            return new Result(taxYear, ccy, List.copyOf(steps), zero, zero, marginalRatePercent != null,
+                    marginalRatePercent, zero, zero, true, null, dueDates(taxYear), List.copyOf(caveats));
         }
 
-        // The wage base for the year: a runtime-supplied figure wins, then the shipped file, then unknown.
+        // 2. Schedule SE's own haircut.
+        Money seEarnings = netProfit.multiply(netEarningsFactor, RoundingMode.HALF_UP);
+        steps.add(new Step(line++, "Self-employment earnings", seEarnings,
+                netProfit.toDecimalString() + " × 92.35% — the law taxes only that share of profit "
+                        + "(IRC §1402(a))."));
+
+        boolean seApplies = seEarnings.minorUnits() >= filingThresholdMinor;
+        if (!seApplies) {
+            steps.add(new Step(line, "Self-employment tax", zero,
+                    "Under the $400 filing threshold (IRC §6017), nothing is due."));
+            return new Result(taxYear, ccy, List.copyOf(steps), zero, zero, marginalRatePercent != null,
+                    marginalRatePercent, zero, zero, true, null, dueDates(taxYear), List.copyOf(caveats));
+        }
+
+        // 3. The wage base for THIS year — runtime figure, shipped file, or unknown.
         Optional<TaxFigures.Figure> runtimeFigure = figures.inForce(TaxFigures.Key.se_wage_base, taxYear);
-        Optional<Money> wageBase = Optional.empty();
-        String wageBaseSource = null;
-        if (runtimeFigure.isPresent()) {
-            TaxFigures.Figure figure = runtimeFigure.get();
-            wageBase = Optional.of(Money.of(figure.value().toPlainString(), ccy));
-            wageBaseSource = "Added on this installation: " + figure.source();
-        } else {
+        Optional<Money> wageBase = runtimeFigure.map(f -> Money.of(f.value().toPlainString(), ccy));
+        String wageBaseSource = runtimeFigure.map(f -> "Added on this installation: " + f.source()).orElse(null);
+        if (wageBase.isEmpty()) {
             Optional<WageBase> fromFile = wageBases.stream().filter(w -> w.taxYear() == taxYear).findFirst();
             if (fromFile.isPresent()) {
                 wageBase = Optional.of(fromFile.get().amount());
@@ -125,59 +152,68 @@ public class EstimatedTaxService {
             }
         }
 
-        Money ssPart;
-        if (!seApplies) {
-            ssPart = Money.zero(ccy);
-        } else if (wageBase.isPresent()) {
-            Money capped = seEarnings.compareTo(wageBase.get()) > 0 ? wageBase.get() : seEarnings;
-            ssPart = capped.multiply(socialSecurityRate, RoundingMode.HALF_UP);
+        // 4. Social Security part.
+        Money ssTaxable;
+        String ssNote;
+        if (wageBase.isPresent()) {
+            boolean capped = seEarnings.compareTo(wageBase.get()) > 0;
+            ssTaxable = capped ? wageBase.get() : seEarnings;
+            ssNote = ssTaxable.toDecimalString() + " × 12.4%"
+                    + (capped ? " — earnings are over the " + wageBase.get().toDecimalString() + " cap for "
+                            + taxYear + ", so only the cap is taxed here" : "");
         } else {
-            // Never reuse last year's cap: compute uncapped and say clearly what is missing (the rule the
-            // whole project follows — unknown is unknown, not interpolated).
-            ssPart = seEarnings.multiply(socialSecurityRate, RoundingMode.HALF_UP);
-            notes.add("No Social Security wage base for " + taxYear + " is on file, so the Social Security "
-                    + "part is computed WITHOUT the cap. If the earnings above are large, this overstates the "
-                    + "estimate. An administrator can add the year's wage base on the installation page.");
+            // Unknown is unknown: compute without a cap and say so, rather than reuse last year's number.
+            ssTaxable = seEarnings;
+            ssNote = ssTaxable.toDecimalString() + " × 12.4% — NO wage-base cap applied: none is on file for "
+                    + taxYear + ". This overstates the estimate if earnings are large; an administrator can "
+                    + "add the year's wage base on the installation page.";
         }
-        Money medicarePart = seApplies ? seEarnings.multiply(medicareRate, RoundingMode.HALF_UP)
-                : Money.zero(ccy);
+        Money ssPart = ssTaxable.multiply(socialSecurityRate, RoundingMode.HALF_UP);
+        steps.add(new Step(line++, "Social Security part", ssPart, ssNote));
+
+        // 5. Medicare part, no cap.
+        Money medicarePart = seEarnings.multiply(medicareRate, RoundingMode.HALF_UP);
+        steps.add(new Step(line++, "Medicare part", medicarePart,
+                seEarnings.toDecimalString() + " × 2.9% — Medicare has no cap."));
+
+        // 6. The SE tax itself, and its deductible half.
         Money seTax = ssPart.add(medicarePart);
-        // Half of self-employment tax is itself a deduction (IRC §164(f)).
+        steps.add(new Step(line++, "Self-employment tax", seTax,
+                "Social Security " + ssPart.toDecimalString() + " + Medicare " + medicarePart.toDecimalString()));
         Money deductibleHalf = seTax.multiply(halfFactor, RoundingMode.HALF_UP);
+        steps.add(new Step(line++, "Half of that is deductible", deductibleHalf,
+                "Half of self-employment tax comes off before income tax (IRC §164(f)): "
+                        + seTax.toDecimalString() + " × 50%."));
 
-        boolean incomeTaxEstimated = marginalRatePercent != null;
-        Money incomeTaxPart = Money.zero(ccy);
-        if (incomeTaxEstimated) {
-            if (netProfit.isPositive()) {
-                incomeTaxPart = netProfit.subtract(deductibleHalf)
-                        .multiply(marginalRatePercent.movePointLeft(2), RoundingMode.HALF_UP);
-            }
-            notes.add("The income-tax part uses the marginal rate you supplied (" + marginalRatePercent
-                    + "%). Solid did not choose it, and it is applied flat — no brackets, no deductions other "
-                    + "than half of SE tax. It is a set-aside target, not a return.");
+        // 7. The income-tax leg — only at the caller's own rate.
+        boolean incomeTaxIncluded = marginalRatePercent != null;
+        Money incomeTaxPart = zero;
+        if (incomeTaxIncluded) {
+            incomeTaxPart = netProfit.subtract(deductibleHalf)
+                    .multiply(marginalRatePercent.movePointLeft(2), RoundingMode.HALF_UP);
+            steps.add(new Step(line++, "Income tax at the rate you chose", incomeTaxPart,
+                    "(" + netProfit.toDecimalString() + " profit − " + deductibleHalf.toDecimalString()
+                            + " deduction) × " + marginalRatePercent + "% — a flat rate you typed in, not one "
+                            + "Solid chose."));
         } else {
-            notes.add("No income-tax estimate: pass marginalRatePercent to include one. Solid will not pick a "
-                    + "rate for you, because the honest rate depends on the rest of your household's income.");
+            steps.add(new Step(line, "Income tax", null,
+                    "Skipped. Solid will not pick a marginal rate for you — the honest one depends on the "
+                            + "rest of your household's income. Pass one to include this step."));
         }
-
-        if (wageBase.isPresent() && seEarnings.compareTo(wageBase.get()) > 0) {
-            notes.add("Self-employment earnings exceed the " + taxYear + " Social Security wage base, so only "
-                    + wageBase.get().toDecimalString() + " is taxed at 12.4%. Medicare still has no cap.");
-        }
-        notes.add("Not included: the Additional Medicare Tax (0.9% over household thresholds), the QBI "
-                + "deduction, itemized deductions, and state tax — all of which need information the entity's "
-                + "books do not have. Rates: " + constantsSource);
 
         Money annual = seTax.add(incomeTaxPart);
-        Money quarterly = annual.multiply(new BigDecimal("0.25"), RoundingMode.HALF_UP);
-        List<String> dueDates = List.of(
-                "April 15, " + taxYear + " (for income earned Jan–Mar)",
-                "June 15, " + taxYear + " (for income earned Apr–May)",
-                "September 15, " + taxYear + " (for income earned Jun–Aug)",
-                "January 15, " + (taxYear + 1) + " (for income earned Sep–Dec)");
+        Money quarterly = annual.multiply(quarterFactor, RoundingMode.HALF_UP);
 
-        return new Result(taxYear, ccy, netProfit, seEarnings, seApplies, ssPart, medicarePart, seTax,
-                deductibleHalf, wageBase.orElse(null), wageBase.isPresent(), wageBaseSource, incomeTaxPart,
-                marginalRatePercent, incomeTaxEstimated, annual, quarterly, dueDates, List.copyOf(notes));
+        return new Result(taxYear, ccy, List.copyOf(steps), seTax, incomeTaxPart, incomeTaxIncluded,
+                marginalRatePercent, annual, quarterly, wageBase.isPresent(), wageBaseSource,
+                dueDates(taxYear), List.copyOf(caveats));
+    }
+
+    private static List<String> dueDates(int taxYear) {
+        return List.of(
+                "April 15, " + taxYear + " (income earned Jan–Mar)",
+                "June 15, " + taxYear + " (income earned Apr–May)",
+                "September 15, " + taxYear + " (income earned Jun–Aug)",
+                "January 15, " + (taxYear + 1) + " (income earned Sep–Dec)");
     }
 }
