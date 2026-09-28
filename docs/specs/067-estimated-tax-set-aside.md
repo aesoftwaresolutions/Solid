@@ -70,4 +70,4 @@ and `wageBaseSource` travel with the answer so any screen (or agent) can cite pr
 ## Out of scope
 Form 1040-ES voucher generation, state estimates, Additional Medicare Tax, QBI, safe-harbor rules (100%/110%
 of prior year — needs last year's filed return, which Solid does not hold), and PDF output. The UI card is
-slice 068 (`frontend/src/pages/EstimatedTaxCard.tsx` — drop onto the Reports page).
+the follow-up slice 068.

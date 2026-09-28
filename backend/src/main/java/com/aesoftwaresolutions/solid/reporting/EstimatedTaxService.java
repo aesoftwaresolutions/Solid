@@ -107,23 +107,19 @@ public class EstimatedTaxService {
 
         List<Step> steps = new ArrayList<>();
         List<String> caveats = new ArrayList<>();
-        caveats.add("Not included: the Additional Medicare Tax (0.9% over household thresholds), the QBI "
-                + "deduction, itemized deductions, and state tax — all of which need information the entity's "
-                + "books do not have.");
-        caveats.add("Rates and rules: " + source);
         int line = 1;
-        Money zero = Money.zero(ccy);
 
         // 1. Start from the books.
         steps.add(new Step(line++, "Net profit this year, from your books", netProfit,
                 "Your posted income minus your posted expenses for " + taxYear + "."));
 
         if (!netProfit.isPositive()) {
+            Money zero = Money.zero(ccy);
             steps.add(new Step(line, "Nothing to set aside for self-employment tax", zero,
                     "No profit, no self-employment tax. If this is still early in the year, look again "
                             + "after a few more sales."));
-            return new Result(taxYear, ccy, List.copyOf(steps), zero, zero, marginalRatePercent != null,
-                    marginalRatePercent, zero, zero, true, null, dueDates(taxYear), List.copyOf(caveats));
+            return finish(taxYear, ccy, steps, zero, zero, marginalRatePercent != null, marginalRatePercent,
+                    zero, zero, true, null, caveats);
         }
 
         // 2. Schedule SE's own haircut.
@@ -134,10 +130,11 @@ public class EstimatedTaxService {
 
         boolean seApplies = seEarnings.minorUnits() >= filingThresholdMinor;
         if (!seApplies) {
+            Money zero = Money.zero(ccy);
             steps.add(new Step(line, "Self-employment tax", zero,
                     "Under the $400 filing threshold (IRC §6017), nothing is due."));
-            return new Result(taxYear, ccy, List.copyOf(steps), zero, zero, marginalRatePercent != null,
-                    marginalRatePercent, zero, zero, true, null, dueDates(taxYear), List.copyOf(caveats));
+            return finish(taxYear, ccy, steps, zero, zero, marginalRatePercent != null, marginalRatePercent,
+                    zero, zero, true, null, caveats);
         }
 
         // 3. The wage base for THIS year — runtime figure, shipped file, or unknown.
@@ -187,7 +184,7 @@ public class EstimatedTaxService {
 
         // 7. The income-tax leg — only at the caller's own rate.
         boolean incomeTaxIncluded = marginalRatePercent != null;
-        Money incomeTaxPart = zero;
+        Money incomeTaxPart = Money.zero(ccy);
         if (incomeTaxIncluded) {
             incomeTaxPart = netProfit.subtract(deductibleHalf)
                     .multiply(marginalRatePercent.movePointLeft(2), RoundingMode.HALF_UP);
@@ -196,7 +193,7 @@ public class EstimatedTaxService {
                             + " deduction) × " + marginalRatePercent + "% — a flat rate you typed in, not one "
                             + "Solid chose."));
         } else {
-            steps.add(new Step(line, "Income tax", null,
+            steps.add(new Step(line++, "Income tax", null,
                     "Skipped. Solid will not pick a marginal rate for you — the honest one depends on the "
                             + "rest of your household's income. Pass one to include this step."));
         }
@@ -204,9 +201,24 @@ public class EstimatedTaxService {
         Money annual = seTax.add(incomeTaxPart);
         Money quarterly = annual.multiply(quarterFactor, RoundingMode.HALF_UP);
 
+        // One shared caveat list, whatever path we took.
+        caveats.add("Not included: the Additional Medicare Tax (0.9% over household thresholds), the QBI "
+                + "deduction, itemized deductions, and state tax — all of which need information the entity's "
+                + "books do not have.");
+        caveats.add("Rates and rules: " + source);
+
         return new Result(taxYear, ccy, List.copyOf(steps), seTax, incomeTaxPart, incomeTaxIncluded,
                 marginalRatePercent, annual, quarterly, wageBase.isPresent(), wageBaseSource,
                 dueDates(taxYear), List.copyOf(caveats));
+    }
+
+    private Result finish(int taxYear, String ccy, List<Step> steps, Money seTax, Money incomeTaxPart,
+                          boolean incomeTaxIncluded, BigDecimal marginalRatePercent, Money annual,
+                          Money quarterly, boolean wageBaseKnown, String wageBaseSource, List<String> caveats) {
+        caveats.add("Rates and rules: " + source);
+        return new Result(taxYear, ccy, List.copyOf(steps), seTax, incomeTaxPart, incomeTaxIncluded,
+                marginalRatePercent, annual, quarterly, wageBaseKnown, wageBaseSource, dueDates(taxYear),
+                List.copyOf(caveats));
     }
 
     private static List<String> dueDates(int taxYear) {
