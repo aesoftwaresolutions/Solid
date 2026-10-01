@@ -10,6 +10,9 @@
     .secondary              on a <button>: the plain, non-green button
     .visually-hidden        text for screen readers only
     .skeleton               grey shimmering placeholder      (use the <Loading> component)
+    .palette-trigger .palette-kbd            the sidebar's search-styled box that opens the jump-to palette
+    .palette-backdrop .palette .palette-item the Ctrl K overlay (drawn by the <CommandPalette> component,
+                                             mounted by the sidebar — styles live here, logic in src/ui)
 
   Need something new? Add it here with a comment, and add it to the list above and to frontend/UI-GUIDE.md.
 */
@@ -160,3 +163,159 @@
 .skeleton:nth-of-type(1) { width: 92%; }
 .skeleton:nth-of-type(2) { width: 76%; }
 .skeleton:nth-of-type(3) { width: 58%; }
+
+/* ---------- Jump-to palette (Ctrl K) ---------- */
+
+/* Looks like a search box at the top of the sidebar, but presses like a button. The class rules outrank the
+   plain `button` styles from base.css, so the trigger keeps its ghost look instead of going accent-green. */
+.palette-trigger {
+  display: flex;
+  width: calc(100% - 16px);
+  align-items: center;
+  gap: 8px;
+  margin: 0 8px 14px;
+  padding: 7px 10px;
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  font-size: 0.9rem;
+  font-weight: 400;
+  transition: border-color var(--dur-fast) ease, color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
+}
+
+.palette-trigger:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line-strong);
+  box-shadow: none;
+}
+
+/* The hint that presses the shortcut on the user's keyboard. Right-aligned inside the trigger or the
+   palette's own search row, where it reads "Esc". */
+.palette-kbd {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* The dimmed page behind the open palette; clicking it closes the palette. Fades with the same timing as
+   everything else (motion.css owns the keyframes). */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 14vh 16px 16px;
+  background: var(--backdrop);
+  animation: fade-in var(--dur-base) ease both;
+}
+
+.palette {
+  width: min(560px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  overflow: hidden;
+  animation: slide-down var(--dur-base) var(--ease-out) both;
+}
+
+.palette-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+/* The field is borderless: the whole search row reads as one control, so the accent focus ring is dropped
+   here (the panel itself is the focus marker). */
+.palette-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+  background: transparent;
+  border: none;
+  font-size: 1rem;
+}
+
+.palette-search input:focus {
+  outline: none;
+  border: none;
+  box-shadow: none;
+}
+
+.palette ul {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* One destination. A <button>, so it inherits base.css's green — neutralized here, tinted by .active below. */
+.palette-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  background: transparent;
+  color: var(--ink);
+  border: none;
+  border-radius: var(--radius-control);
+  font-size: 0.94rem;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette-item svg {
+  color: var(--muted);
+}
+
+/* Hover before the mouse has set the active row: a quiet grey, so it never flashes green. */
+.palette-item:hover:not(:disabled) {
+  background: var(--hover);
+  box-shadow: none;
+}
+
+/* The row the keyboard (or mouse) is on: same tint treatment as the active sidebar link. Written after the
+   hover rule so the tint beats the grey when a row is both. */
+.palette-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.palette-item.active svg {
+  color: var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .palette-item.active {
+    color: var(--link);
+  }
+  .palette-item.active svg {
+    color: var(--link);
+  }
+}
+
+.palette-empty {
+  padding: 18px 14px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  text-align: center;
+}

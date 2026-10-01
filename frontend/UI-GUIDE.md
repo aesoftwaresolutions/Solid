@@ -11,10 +11,11 @@ without reading the whole project.
 | A color, size, shadow, or animation speed | `src/styles/tokens.css`         |
 | How buttons, tables, inputs, links look   | `src/styles/base.css`           |
 | Top bar, sidebar, mobile menu, page width | `src/styles/layout.css`         |
-| Cards, number tiles, messages, loading    | `src/styles/components.css`     |
+| Cards, number tiles, messages, loading, palette | `src/styles/components.css`     |
 | An animation (entrance, shimmer, …)       | `src/styles/motion.css`         |
 | Which links are in the sidebar            | `src/ui/navigation.ts`          |
 | An icon                                   | `src/ui/icons.tsx`              |
+| The jump-to palette (Ctrl K)              | `src/ui/CommandPalette.tsx`     |
 | Which page shows at which address         | `src/App.tsx` (the `<Routes>`)  |
 | Shared pieces (`Card`, `Loading`, `ErrorMessage`) | `src/components.tsx`    |
 | One screen                                | `src/pages/<Name>Page.tsx`      |
@@ -86,6 +87,11 @@ export default function ExamplePage() {
 | `error`            | `<p>`                | Red message; slides in and nudges (prefer `<ErrorMessage>`) |
 | `visually-hidden`  | `<span>`/`<label>`   | Read by screen readers, not drawn               |
 | `right`            | any                  | Right-aligned text                              |
+| `palette-trigger`  | `<button>`           | The search-styled box in the sidebar that opens the palette (drawn by `<Sidebar>`, not by pages) |
+| `palette-kbd`      | `<span>`/`<kbd>`     | The small shortcut hint inside the trigger or the palette's search row |
+
+The palette's own pieces (`palette-backdrop`, `palette`, `palette-search`, `palette-item`) belong to the
+`<CommandPalette>` component — pages never put them in markup themselves.
 
 Number tiles:
 
@@ -110,7 +116,8 @@ light block at the top and the `prefers-color-scheme: dark` block. Nothing else.
    `<Route path="/orgs/:orgId/entities/:entityId/payroll" element={<PayrollPage />} />`
 3. In `src/ui/navigation.ts`, add one line to the right group:
    `{ label: 'Payroll', path: 'payroll', icon: 'list' },`
-The sidebar highlights it automatically when it is open.
+The sidebar highlights it automatically when it is open, and the jump-to palette lists it with no further
+work.
 
 ### Add an icon
 In `src/ui/icons.tsx`, add an entry to `ICONS` using only `<path d="…" />` and `<circle … />` on a 24×24
@@ -152,3 +159,15 @@ back rather than editing the test.
 
 The sidebar is drawn by `src/ui/Sidebar.tsx` from the list in `src/ui/navigation.ts`. The top bar and
 the drawer's open/close logic are in `Shell()` in `src/App.tsx`.
+
+## 8. The jump-to palette (Ctrl K)
+
+Inside an entity, press **Ctrl K** (Cmd K on a Mac) — or the search-styled "Jump to…" button at the top of
+the sidebar — to open the palette. Type part of a page's name, move with the arrow keys, Enter to go.
+Escape, Ctrl K again, or clicking outside closes it.
+
+- Destinations are everything in `src/ui/navigation.ts` (its group headings double as search keywords),
+  plus All entities, Account and Instance. Add a page to the sidebar and the palette lists it by itself.
+- The open state lives in `src/ui/Sidebar.tsx`; the palette itself is `src/ui/CommandPalette.tsx`.
+- Styles are the palette section at the end of `src/styles/components.css`; the two entrance animations
+  are the existing `fade-in` and `slide-down` keyframes from `motion.css`, so reduced motion just works.

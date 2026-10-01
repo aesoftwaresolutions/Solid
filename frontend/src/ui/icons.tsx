@@ -106,6 +106,19 @@ const ICONS = {
       <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
     </>
   ),
+  people: (
+    <>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5.5 20c1.4-3.6 3.8-5.2 6.5-5.2s5.1 1.6 6.5 5.2" />
+    </>
+  ),
+  server: (
+    <>
+      <rect x="4.5" y="4.5" width="15" height="6" rx="1.5" />
+      <rect x="4.5" y="13" width="15" height="6" rx="1.5" />
+      <path d="M8 7.5h.01M8 16h.01" />
+    </>
+  ),
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,
   back: <path d="m15 6-6 6 6 6" />,
