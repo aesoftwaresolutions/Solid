@@ -22,7 +22,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class JournalService {
 
-    public record NewLine(UUID accountId, Money amount, String memo) {
+    /** @param businessLineId the facet this line belongs to (spec 069); null = shared or unassigned */
+    public record NewLine(UUID accountId, Money amount, String memo, UUID businessLineId) {
+        public NewLine(UUID accountId, Money amount, String memo) {
+            this(accountId, amount, memo, null);
+        }
     }
 
     public record ChainVerification(boolean valid, long postedEntries, Long firstInvalidSeq) {
@@ -32,12 +36,15 @@ public class JournalService {
     private final OrgScope orgScope;
     private final OrgService orgs;
     private final AuditLog audit;
+    private final BusinessLineService businessLines;
 
-    JournalService(JdbcClient db, OrgScope orgScope, OrgService orgs, AuditLog audit) {
+    JournalService(JdbcClient db, OrgScope orgScope, OrgService orgs, AuditLog audit,
+                   BusinessLineService businessLines) {
         this.db = db;
         this.orgScope = orgScope;
         this.orgs = orgs;
         this.audit = audit;
+        this.businessLines = businessLines;
     }
 
     public record CreateResult(JournalEntry entry, boolean replayed) {
@@ -54,8 +61,25 @@ public class JournalService {
         return create(orgId, entityId, entryDate, memo, true, lines, null, source, sourceRef, null).entry();
     }
 
+    /**
+     * As {@link #postFromSource}, for an entry that takes back something already recorded (a credit note against an
+     * invoice): its business lines are copied from the original, so they are accepted even if archived since.
+     */
+    public JournalEntry postTakingBackFromSource(UUID orgId, UUID entityId, LocalDate entryDate, String memo,
+                                                 List<NewLine> lines, String source, UUID sourceRef) {
+        return create(orgId, entityId, entryDate, memo, true, lines, null, source, sourceRef, null, true).entry();
+    }
+
     CreateResult create(UUID orgId, UUID entityId, LocalDate entryDate, String memo, boolean post, List<NewLine> lines,
                         String idempotencyKey, String source, UUID sourceRef, UUID reversesEntryId) {
+        // A reversal mirrors its original exactly, even onto a business line archived since.
+        return create(orgId, entityId, entryDate, memo, post, lines, idempotencyKey, source, sourceRef, reversesEntryId,
+                reversesEntryId != null);
+    }
+
+    private CreateResult create(UUID orgId, UUID entityId, LocalDate entryDate, String memo, boolean post,
+                                List<NewLine> lines, String idempotencyKey, String source, UUID sourceRef,
+                                UUID reversesEntryId, boolean allowArchivedBusinessLines) {
         LegalEntity entity = orgs.getEntity(orgId, entityId);
         return orgScope.call(orgId, () -> {
             if (idempotencyKey != null) {
@@ -65,7 +89,7 @@ public class JournalService {
                     return new CreateResult(load(entityId, existing.get()), true);
                 }
             }
-            validateLines(entityId, entity.baseCurrency(), lines, post);
+            validateLines(entityId, entity.baseCurrency(), lines, post, allowArchivedBusinessLines);
             requireOpenPeriod(entityId, entryDate);
 
             UUID id = Ids.newId();
@@ -78,10 +102,11 @@ public class JournalService {
             int lineNo = 1;
             for (NewLine line : lines) {
                 db.sql("""
-                        insert into gl.journal_line (id, org_id, journal_entry_id, line_no, account_id, amount_minor, currency, memo)
-                        values (?, ?, ?, ?, ?, ?, ?, ?)""")
+                        insert into gl.journal_line (id, org_id, journal_entry_id, line_no, account_id, amount_minor, currency,
+                                                     memo, business_line_id)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?)""")
                         .params(Ids.newId(), orgId, id, lineNo++, line.accountId(), line.amount().minorUnits(),
-                                line.amount().currency(), line.memo())
+                                line.amount().currency(), line.memo(), line.businessLineId())
                         .update();
             }
             if (post) {
@@ -99,8 +124,8 @@ public class JournalService {
                 throw new BusinessRuleException("ENTRY_POSTED", "Entry is already posted");
             }
             List<NewLine> lines = entry.lines().stream()
-                    .map(l -> new NewLine(l.accountId(), l.amount(), l.memo())).toList();
-            validateLines(entityId, entity.baseCurrency(), lines, true);
+                    .map(l -> new NewLine(l.accountId(), l.amount(), l.memo(), l.businessLineId())).toList();
+            validateLines(entityId, entity.baseCurrency(), lines, true, false);
             requireOpenPeriod(entityId, entry.entryDate());
             markPosted(entityId, entryId);
             return load(entityId, entryId);
@@ -127,7 +152,7 @@ public class JournalService {
                 throw new BusinessRuleException("ALREADY_REVERSED", "Entry has already been reversed");
             }
             List<NewLine> negated = original.lines().stream()
-                    .map(l -> new NewLine(l.accountId(), l.amount().negate(), l.memo())).toList();
+                    .map(l -> new NewLine(l.accountId(), l.amount().negate(), l.memo(), l.businessLineId())).toList();
             String reversalMemo = memo != null ? memo
                     : "Reversal of " + original.entryDate() + (original.memo() == null ? "" : ": " + original.memo());
             // create() opens its own org scope; inside this one it simply joins the transaction.
@@ -259,7 +284,8 @@ public class JournalService {
 
     // ---------- internals (call inside orgScope) ----------
 
-    private void validateLines(UUID entityId, String baseCurrency, List<NewLine> lines, boolean forPosting) {
+    private void validateLines(UUID entityId, String baseCurrency, List<NewLine> lines, boolean forPosting,
+                               boolean allowArchivedBusinessLine) {
         if (lines.isEmpty()) {
             throw new IllegalArgumentException("An entry needs at least one line");
         }
@@ -280,6 +306,9 @@ public class JournalService {
             if (account == null || !account.entityId().equals(entityId) || account.isHeader() || account.isArchived()) {
                 throw new BusinessRuleException("ACCOUNT_NOT_POSTABLE",
                         "Account " + line.accountId() + " is not an active, non-header account of this entity");
+            }
+            if (!allowArchivedBusinessLine) {
+                businessLines.requireAssignable(entityId, line.businessLineId());
             }
             total = total.add(line.amount());
         }
@@ -321,10 +350,12 @@ public class JournalService {
     }
 
     private List<JournalHasher.HashLine> hashLines(UUID entryId) {
-        return db.sql("select line_no, account_id, amount_minor, currency from gl.journal_line where journal_entry_id = ?")
+        return db.sql("""
+                        select line_no, account_id, amount_minor, currency, business_line_id
+                        from gl.journal_line where journal_entry_id = ?""")
                 .param(entryId)
                 .query((rs, n) -> new JournalHasher.HashLine(rs.getInt("line_no"), rs.getObject("account_id", UUID.class),
-                        rs.getLong("amount_minor"), rs.getString("currency")))
+                        rs.getLong("amount_minor"), rs.getString("currency"), rs.getObject("business_line_id", UUID.class)))
                 .list();
     }
 
@@ -337,11 +368,12 @@ public class JournalService {
 
     private JournalEntry load(UUID entityId, UUID entryId) {
         List<JournalEntry.Line> lines = db.sql("""
-                select line_no, account_id, amount_minor, currency, memo from gl.journal_line
+                select line_no, account_id, amount_minor, currency, memo, business_line_id from gl.journal_line
                 where journal_entry_id = ? order by line_no""")
                 .param(entryId)
                 .query((rs, n) -> new JournalEntry.Line(rs.getInt("line_no"), rs.getObject("account_id", UUID.class),
-                        Money.ofMinor(rs.getLong("amount_minor"), rs.getString("currency")), rs.getString("memo")))
+                        Money.ofMinor(rs.getLong("amount_minor"), rs.getString("currency")), rs.getString("memo"),
+                        rs.getObject("business_line_id", UUID.class)))
                 .list();
         return db.sql("""
                 select id, org_id, entity_id, entry_date, memo, source, status, reverses_entry_id, posting_seq, hash,

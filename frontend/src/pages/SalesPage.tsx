@@ -12,6 +12,7 @@ import {
   type SalesTaxRate,
 } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
+import { BusinessLineSelect } from './BusinessLines';
 
 const TERMS = ['due_on_receipt', 'net_15', 'net_30', 'net_60'];
 
@@ -654,6 +655,8 @@ function NewInvoice({
   const [unitPrice, setUnitPrice] = useState('');
   const [incomeAccountId, setIncomeAccountId] = useState(incomeAccounts[0].id);
   const [taxRateId, setTaxRateId] = useState('');
+  const [businessLineId, setBusinessLineId] = useState('');
+  const businessLines = useLoader(() => api.businessLines(orgId, entityId), [orgId, entityId]);
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
 
@@ -668,6 +671,7 @@ function NewInvoice({
             customerId,
             issueDate,
             terms,
+            businessLineId: businessLineId || undefined,
             lines: [
               {
                 description: description.trim(),
@@ -688,6 +692,7 @@ function NewInvoice({
       }}
     >
       <ErrorMessage error={error} />
+      <BusinessLineSelect lines={businessLines.value} value={businessLineId} onChange={setBusinessLineId} />
       <label>
         Customer
         <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>

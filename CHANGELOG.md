@@ -6,6 +6,12 @@ The format follows keepachangelog.com; versions use semver.
 ## [Unreleased]
 
 ### Added
+- Slice 069: business lines. Name the facets of a business (web design, automation, a product), choose one on
+  invoices, bills, bank transactions and journal lines, and read the profit and loss with one column per line
+  plus *Shared / overhead* (`GET .../reports/profit-and-loss-by-business-line`, and `.csv`). Management
+  reporting only: tax lines and totals are unchanged. Covered by the hash chain only when present, so existing
+  entries verify as before. The export gains `business-lines.csv`.
+- `business/`: the operating map of AE Software Solutions, one folder per business facet.
 - Slice 067: quarterly estimated-tax set-aside worksheet
   (`GET .../reports/estimated-tax?taxYear=YYYY[&marginalRatePercent=NN]`). SE tax from statute and the
   sourced wage base (runtime-overridable via a new `se_wage_base` tax figure); the income-tax leg exists only
@@ -16,6 +22,7 @@ The format follows keepachangelog.com; versions use semver.
 - MCP server (`mcp/`) so a local LLM agent can read the books and perform a small set of safe writes.
 
 ### Fixed
+- Frontend: `setupTests.ts` failed the strict type check, which broke `npm run build`.
 - Desktop remote-database slice: POSIX file tests now run on their intended OS only; a test referenced a
   helper that did not exist; remote connections now carry a socket timeout so a stalled server fails fast
   instead of hanging startup.

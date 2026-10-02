@@ -21,7 +21,8 @@ final class JournalRequests {
             @NotEmpty @Size(max = 500) List<@Valid LineRequest> lines) {
     }
 
-    record LineRequest(@NotNull UUID accountId, @NotNull Money amount, @Size(max = 500) String memo) {
+    record LineRequest(@NotNull UUID accountId, @NotNull Money amount, @Size(max = 500) String memo,
+                       UUID businessLineId) {
     }
 
     record Reverse(LocalDate entryDate, @Size(max = 500) String memo) {

@@ -42,7 +42,7 @@ class PayableController {
     record BillRequest(@NotNull UUID vendorId, @NotNull LocalDate billDate,
                        @NotNull @Pattern(regexp = "due_on_receipt|net_15|net_30|net_60") String terms,
                        @Size(max = 60) String vendorReference, @Size(max = 500) String memo,
-                       @NotEmpty @Size(max = 200) List<@Valid BillLineRequest> lines) {
+                       @NotEmpty @Size(max = 200) List<@Valid BillLineRequest> lines, UUID businessLineId) {
     }
 
     record ApplicationRequest(@NotNull UUID billId, @NotNull Money amount) {
@@ -99,14 +99,14 @@ class PayableController {
     PayableModels.Bill createBill(@PathVariable UUID orgId, @PathVariable UUID entityId,
                                   @Valid @RequestBody BillRequest body) {
         return payables.createBill(orgId, entityId, body.vendorId(), body.billDate(), body.terms(),
-                body.vendorReference(), body.memo(), lines(body));
+                body.vendorReference(), body.memo(), lines(body), body.businessLineId());
     }
 
     @PatchMapping("/bills/{billId}")
     PayableModels.Bill updateBill(@PathVariable UUID orgId, @PathVariable UUID entityId, @PathVariable UUID billId,
                                   @Valid @RequestBody BillRequest body) {
         return payables.updateDraft(orgId, entityId, billId, body.vendorId(), body.billDate(), body.terms(),
-                body.vendorReference(), body.memo(), lines(body));
+                body.vendorReference(), body.memo(), lines(body), body.businessLineId());
     }
 
     @PostMapping("/bills/{billId}/approve")

@@ -13,7 +13,7 @@ const authenticatedUser = {
 beforeEach(() => {
   const nativeFetch = globalThis.fetch.bind(globalThis) as typeof fetch;
 
-  vi.stubGlobal('fetch', async (input, init) => {
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string'
       ? input
       : input instanceof Request

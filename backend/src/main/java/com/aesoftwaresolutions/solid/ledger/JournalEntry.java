@@ -24,6 +24,7 @@ public record JournalEntry(
     public enum Status { draft, posted }
 
     /** Positive amount = debit, negative = credit. */
-    public record Line(int lineNo, UUID accountId, Money amount, String memo) {
+    /** @param businessLineId the facet of the business this line belongs to (spec 069); null = shared/unassigned */
+    public record Line(int lineNo, UUID accountId, Money amount, String memo, UUID businessLineId) {
     }
 }

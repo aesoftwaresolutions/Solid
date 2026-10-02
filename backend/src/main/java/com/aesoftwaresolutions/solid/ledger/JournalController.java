@@ -37,7 +37,7 @@ class JournalController {
             throw new IllegalArgumentException("Idempotency-Key must be 1-100 characters");
         }
         List<JournalService.NewLine> lines = body.lines().stream()
-                .map(l -> new JournalService.NewLine(l.accountId(), l.amount(), l.memo())).toList();
+                .map(l -> new JournalService.NewLine(l.accountId(), l.amount(), l.memo(), l.businessLineId())).toList();
         JournalService.CreateResult result = journal.create(orgId, entityId, body.entryDate(), body.memo(),
                 Boolean.TRUE.equals(body.post()), lines, idempotencyKey);
         return ResponseEntity.status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED).body(result.entry());

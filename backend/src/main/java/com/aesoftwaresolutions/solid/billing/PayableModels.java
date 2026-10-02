@@ -22,7 +22,7 @@ public final class PayableModels {
 
     public record Bill(UUID id, UUID entityId, UUID vendorId, String vendorReference, LocalDate billDate,
                        LocalDate dueDate, String terms, String memo, Money total, Money amountPaid, Money balanceDue,
-                       String status, UUID journalEntryId, List<BillLine> lines) {
+                       String status, UUID journalEntryId, List<BillLine> lines, UUID businessLineId) {
     }
 
     public record BillPaymentApplication(UUID billId, Money amount) {

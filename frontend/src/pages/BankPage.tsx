@@ -10,6 +10,8 @@ export default function BankPage() {
   const queue = useLoader(() => api.bankTransactions(orgId, entityId, 'new'), [orgId, entityId]);
   const rules = useLoader(() => api.categorizationRules(orgId, entityId), [orgId, entityId]);
   const documents = useLoader(() => api.documents(orgId, entityId), [orgId, entityId]);
+  const businessLines = useLoader(() => api.businessLines(orgId, entityId), [orgId, entityId]);
+  const activeLines = (businessLines.value ?? []).filter((line) => !line.isArchived);
 
   const [selectedBankAccount, setSelectedBankAccount] = useState('');
   const [importMessage, setImportMessage] = useState<string | null>(null);
@@ -17,6 +19,8 @@ export default function BankPage() {
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [chosen, setChosen] = useState<Record<string, string>>({});
+  /** The business line picked per row (spec 069); absent means shared / unassigned. */
+  const [chosenLine, setChosenLine] = useState<Record<string, string>>({});
 
   const postable: Account[] = useMemo(
     () => (accounts.value ?? []).filter((a) => !a.isHeader && !a.isArchived),
@@ -65,7 +69,7 @@ export default function BankPage() {
     setBusy(true);
     setActionError(undefined);
     api
-      .categorize(orgId, entityId, txn.id, accountId)
+      .categorize(orgId, entityId, txn.id, accountId, chosenLine[txn.id])
       .then(() => {
         setConfirmation(`Recorded ${txn.postedDate} · ${formatMoney(txn.amount)} · ${txn.description}`);
         queue.reload();
@@ -77,7 +81,11 @@ export default function BankPage() {
   /** Everything reviewed on screen, saved in one request instead of one per row. */
   const saveAllReviewed = () => {
     const items = (queue.value ?? [])
-      .map((txn) => ({ id: txn.id, accountId: chosen[txn.id] ?? txn.suggestedAccountId ?? '' }))
+      .map((txn) => ({
+        id: txn.id,
+        accountId: chosen[txn.id] ?? txn.suggestedAccountId ?? '',
+        businessLineId: chosenLine[txn.id] || undefined,
+      }))
       .filter((item) => item.accountId !== '');
     if (items.length === 0) {
       setActionError(new Error('Pick a category on at least one row first'));
@@ -90,6 +98,7 @@ export default function BankPage() {
       .then(() => {
         setConfirmation(`Recorded ${items.length} transaction(s).`);
         setChosen({});
+        setChosenLine({});
         queue.reload();
       })
       .catch(setActionError)
@@ -250,6 +259,25 @@ export default function BankPage() {
                         </option>
                       ))}
                     </select>
+                    {activeLines.length > 0 && (
+                      <>
+                        <label className="visually-hidden" htmlFor={`line-${txn.id}`}>
+                          Business line for {txn.description}
+                        </label>
+                        <select
+                          id={`line-${txn.id}`}
+                          value={chosenLine[txn.id] ?? ''}
+                          onChange={(e) => setChosenLine({ ...chosenLine, [txn.id]: e.target.value })}
+                        >
+                          <option value="">(shared / unassigned)</option>
+                          {activeLines.map((line) => (
+                            <option key={line.id} value={line.id}>
+                              {line.name}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    )}
                     {txn.suggestionSource && <div className="muted">suggested from {txn.suggestionSource}</div>}
                     <button
                       type="button"

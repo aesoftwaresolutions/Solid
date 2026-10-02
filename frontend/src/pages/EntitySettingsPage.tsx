@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, type Branding } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
+import { BusinessLinesCard } from './BusinessLines';
 
 const STATES = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'DC', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY',
@@ -158,6 +159,7 @@ export default function EntitySettingsPage() {
           </form>
         </Card>
       )}
+      <BusinessLinesCard orgId={orgId} entityId={entityId} />
       <Card title="What goes on the documents you send">
         <p className="muted">
           Your address, how to reach you and how to be paid. All of it is optional. How to pay appears on
