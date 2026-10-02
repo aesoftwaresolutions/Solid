@@ -9,6 +9,7 @@ import com.aesoftwaresolutions.solid.ledger.Account;
 import com.aesoftwaresolutions.solid.ledger.AccountService;
 import com.aesoftwaresolutions.solid.ledger.AccountType;
 import com.aesoftwaresolutions.solid.ledger.JournalEntry;
+import com.aesoftwaresolutions.solid.ledger.BusinessLineService;
 import com.aesoftwaresolutions.solid.ledger.JournalService;
 import com.aesoftwaresolutions.solid.money.Money;
 import com.aesoftwaresolutions.solid.org.LegalEntity;
@@ -42,9 +43,11 @@ public class PayableService {
     private final JournalService journal;
     private final Form1099Thresholds thresholds;
     private final AuditLog audit;
+    private final BusinessLineService businessLines;
 
     PayableService(JdbcClient db, OrgScope orgScope, OrgService orgs, AccountService accounts, JournalService journal,
-                   Form1099Thresholds thresholds, AuditLog audit) {
+                   Form1099Thresholds thresholds, AuditLog audit,
+                   BusinessLineService businessLines) {
         this.db = db;
         this.orgScope = orgScope;
         this.orgs = orgs;
@@ -52,6 +55,7 @@ public class PayableService {
         this.journal = journal;
         this.thresholds = thresholds;
         this.audit = audit;
+        this.businessLines = businessLines;
     }
 
     // ---------------- vendors ----------------
@@ -150,16 +154,24 @@ public class PayableService {
 
     public PayableModels.Bill createBill(UUID orgId, UUID entityId, UUID vendorId, LocalDate billDate, String terms,
                                          String vendorReference, String memo, List<NewBillLine> lines) {
+        return createBill(orgId, entityId, vendorId, billDate, terms, vendorReference, memo, lines, null);
+    }
+
+    /** @param businessLineId the facet this cost belongs to (spec 069); its expense lines carry it when approved */
+    public PayableModels.Bill createBill(UUID orgId, UUID entityId, UUID vendorId, LocalDate billDate, String terms,
+                                         String vendorReference, String memo, List<NewBillLine> lines,
+                                         UUID businessLineId) {
         LegalEntity entity = orgs.getEntity(orgId, entityId);
         return orgScope.call(orgId, () -> {
+            businessLines.requireAssignable(entityId, businessLineId);
             findVendor(entityId, vendorId);
             UUID id = Ids.newId();
             db.sql("""
                     insert into ar_ap.bill (id, org_id, entity_id, vendor_id, vendor_reference, bill_date, due_date,
-                                            terms, memo, total_minor, currency, status)
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')""")
+                                            terms, memo, total_minor, currency, status, business_line_id)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft', ?)""")
                     .params(id, orgId, entityId, vendorId, vendorReference, billDate, dueDate(billDate, terms), terms,
-                            memo, entity.baseCurrency())
+                            memo, entity.baseCurrency(), businessLineId)
                     .update();
             replaceLines(orgId, entityId, entity.baseCurrency(), id, lines);
             return loadBill(entityId, id);
@@ -167,7 +179,8 @@ public class PayableService {
     }
 
     public PayableModels.Bill updateDraft(UUID orgId, UUID entityId, UUID billId, UUID vendorId, LocalDate billDate,
-                                          String terms, String vendorReference, String memo, List<NewBillLine> lines) {
+                                          String terms, String vendorReference, String memo, List<NewBillLine> lines,
+                                          UUID businessLineId) {
         LegalEntity entity = orgs.getEntity(orgId, entityId);
         return orgScope.call(orgId, () -> {
             PayableModels.Bill bill = lockBill(entityId, billId);
@@ -175,8 +188,14 @@ public class PayableService {
                 throw new BusinessRuleException("BILL_NOT_DRAFT", "Only draft bills can be edited");
             }
             findVendor(entityId, vendorId);
-            db.sql("update ar_ap.bill set vendor_id = ?, bill_date = ?, due_date = ?, terms = ?, vendor_reference = ?, memo = ? where id = ?")
-                    .params(vendorId, billDate, dueDate(billDate, terms), terms, vendorReference, memo, billId).update();
+            businessLines.requireAssignable(entityId, businessLineId);
+            db.sql("""
+                    update ar_ap.bill set vendor_id = ?, bill_date = ?, due_date = ?, terms = ?, vendor_reference = ?,
+                                          memo = ?, business_line_id = ?
+                    where id = ?""")
+                    .params(vendorId, billDate, dueDate(billDate, terms), terms, vendorReference, memo, businessLineId,
+                            billId)
+                    .update();
             db.sql("delete from ar_ap.bill_line where bill_id = ?").param(billId).update();
             replaceLines(orgId, entityId, entity.baseCurrency(), billId, lines);
             return loadBill(entityId, billId);
@@ -211,7 +230,8 @@ public class PayableService {
             Account payable = payableAccount(orgId, entityId);
             List<JournalService.NewLine> journalLines = new ArrayList<>();
             for (PayableModels.BillLine line : bill.lines()) {
-                journalLines.add(new JournalService.NewLine(line.expenseAccountId(), line.amount(), line.description()));
+                journalLines.add(new JournalService.NewLine(line.expenseAccountId(), line.amount(), line.description(),
+                        bill.businessLineId()));
             }
             journalLines.add(new JournalService.NewLine(payable.id(), bill.total().negate(), null));
             JournalEntry entry = journal.postFromSource(orgId, entityId, bill.billDate(),
@@ -467,7 +487,7 @@ public class PayableService {
     private PayableModels.Bill loadBill(UUID entityId, UUID billId) {
         Map<String, Object> row = db.sql("""
                 select id, entity_id, vendor_id, vendor_reference, bill_date, due_date, terms, memo, total_minor,
-                       currency, status, journal_entry_id,
+                       currency, status, journal_entry_id, business_line_id,
                        coalesce((select sum(amount_minor) from ar_ap.bill_payment_application where bill_id = ar_ap.bill.id), 0) as paid_minor
                 from ar_ap.bill where entity_id = ? and id = ?""")
                 .params(entityId, billId).query().listOfRows().stream().findFirst()
@@ -486,7 +506,8 @@ public class PayableService {
         return new PayableModels.Bill((UUID) row.get("id"), (UUID) row.get("entity_id"), (UUID) row.get("vendor_id"),
                 (String) row.get("vendor_reference"), date(row.get("bill_date")), date(row.get("due_date")),
                 (String) row.get("terms"), (String) row.get("memo"), total, paid, total.subtract(paid),
-                (String) row.get("status"), (UUID) row.get("journal_entry_id"), lines);
+                (String) row.get("status"), (UUID) row.get("journal_entry_id"), lines,
+                (UUID) row.get("business_line_id"));
     }
 
     private PayableModels.BillPayment loadPayment(UUID entityId, UUID paymentId) {

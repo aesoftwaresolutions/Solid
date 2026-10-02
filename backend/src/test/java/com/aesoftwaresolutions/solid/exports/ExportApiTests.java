@@ -132,7 +132,8 @@ class ExportApiTests {
 
         Map<String, String> files = download(base + "/export.zip", HttpStatus.OK);
         assertThat(files.keySet()).containsExactlyInAnyOrder("README.txt", "accounts.csv", "journal-entries.csv",
-                "journal-lines.csv", "bank-transactions.csv", "invoices.csv", "bills.csv", "documents.csv");
+                "journal-lines.csv", "business-lines.csv", "bank-transactions.csv", "invoices.csv", "bills.csv",
+                "documents.csv");
         files.forEach((name, content) -> {
             if (name.endsWith(".csv")) {
                 assertThat(content).as(name + " has a header").startsWith(parse(content).get(0).get(0));

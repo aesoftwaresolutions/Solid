@@ -9,6 +9,7 @@ import com.aesoftwaresolutions.solid.ledger.Account;
 import com.aesoftwaresolutions.solid.ledger.AccountService;
 import com.aesoftwaresolutions.solid.ledger.AccountType;
 import com.aesoftwaresolutions.solid.ledger.JournalEntry;
+import com.aesoftwaresolutions.solid.ledger.BusinessLineService;
 import com.aesoftwaresolutions.solid.ledger.JournalService;
 import com.aesoftwaresolutions.solid.money.Money;
 import com.aesoftwaresolutions.solid.org.LegalEntity;
@@ -49,10 +50,12 @@ public class BillingService {
     private final JournalService journal;
     private final SalesTaxService salesTax;
     private final AuditLog audit;
+    private final BusinessLineService businessLines;
 
     BillingService(JdbcClient db, OrgScope orgScope, OrgService orgs,
                    com.aesoftwaresolutions.solid.org.BrandingService branding, AccountService accounts,
-                   JournalService journal, SalesTaxService salesTax, AuditLog audit) {
+                   JournalService journal, SalesTaxService salesTax, AuditLog audit,
+                   BusinessLineService businessLines) {
         this.db = db;
         this.orgScope = orgScope;
         this.orgs = orgs;
@@ -61,6 +64,7 @@ public class BillingService {
         this.journal = journal;
         this.salesTax = salesTax;
         this.audit = audit;
+        this.businessLines = businessLines;
     }
 
     // ---------------- customers ----------------
@@ -88,19 +92,27 @@ public class BillingService {
 
     public BillingModels.Invoice createInvoice(UUID orgId, UUID entityId, UUID customerId, LocalDate issueDate,
                                                String terms, String invoiceNumber, String memo, List<NewLine> lines) {
+        return createInvoice(orgId, entityId, customerId, issueDate, terms, invoiceNumber, memo, lines, null);
+    }
+
+    /** @param businessLineId the facet this sale belongs to (spec 069); its income lines carry it when posted */
+    public BillingModels.Invoice createInvoice(UUID orgId, UUID entityId, UUID customerId, LocalDate issueDate,
+                                               String terms, String invoiceNumber, String memo, List<NewLine> lines,
+                                               UUID businessLineId) {
         LegalEntity entity = orgs.getEntity(orgId, entityId);
         return orgScope.call(orgId, () -> {
             findCustomer(entityId, customerId);
+            businessLines.requireAssignable(entityId, businessLineId);
             UUID id = Ids.newId();
             String number = invoiceNumber == null || invoiceNumber.isBlank() ? nextInvoiceNumber(entityId) : invoiceNumber.trim();
             requireNumberFree(entityId, number);
             LocalDate dueDate = dueDate(issueDate, terms);
             db.sql("""
                     insert into ar_ap.invoice (id, org_id, entity_id, customer_id, invoice_number, issue_date, due_date,
-                                               terms, memo, total_minor, currency, status)
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')""")
+                                               terms, memo, total_minor, currency, status, business_line_id)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft', ?)""")
                     .params(id, orgId, entityId, customerId, number, issueDate, dueDate, terms, memo,
-                            entity.baseCurrency())
+                            entity.baseCurrency(), businessLineId)
                     .update();
             replaceLines(orgId, entityId, entity.baseCurrency(), id, issueDate, lines);
             return loadInvoice(entityId, id);
@@ -108,14 +120,20 @@ public class BillingService {
     }
 
     public BillingModels.Invoice updateDraft(UUID orgId, UUID entityId, UUID invoiceId, UUID customerId,
-                                             LocalDate issueDate, String terms, String memo, List<NewLine> lines) {
+                                             LocalDate issueDate, String terms, String memo, List<NewLine> lines,
+                                             UUID businessLineId) {
         LegalEntity entity = orgs.getEntity(orgId, entityId);
         return orgScope.call(orgId, () -> {
             BillingModels.Invoice invoice = lockInvoice(entityId, invoiceId);
             requireStatus(invoice, "draft", "INVOICE_NOT_DRAFT", "Only draft invoices can be edited");
             findCustomer(entityId, customerId);
-            db.sql("update ar_ap.invoice set customer_id = ?, issue_date = ?, due_date = ?, terms = ?, memo = ? where id = ?")
-                    .params(customerId, issueDate, dueDate(issueDate, terms), terms, memo, invoiceId).update();
+            businessLines.requireAssignable(entityId, businessLineId);
+            db.sql("""
+                    update ar_ap.invoice set customer_id = ?, issue_date = ?, due_date = ?, terms = ?, memo = ?,
+                                             business_line_id = ?
+                    where id = ?""")
+                    .params(customerId, issueDate, dueDate(issueDate, terms), terms, memo, businessLineId, invoiceId)
+                    .update();
             db.sql("delete from ar_ap.invoice_line where invoice_id = ?").param(invoiceId).update();
             replaceLines(orgId, entityId, entity.baseCurrency(), invoiceId, issueDate, lines);
             return loadInvoice(entityId, invoiceId);
@@ -221,7 +239,8 @@ public class BillingService {
             List<JournalService.NewLine> journalLines = new ArrayList<>();
             journalLines.add(new JournalService.NewLine(receivable.id(), invoice.total(), null));
             for (BillingModels.InvoiceLine line : invoice.lines()) {
-                journalLines.add(new JournalService.NewLine(line.incomeAccountId(), line.amount().negate(), line.description()));
+                journalLines.add(new JournalService.NewLine(line.incomeAccountId(), line.amount().negate(),
+                        line.description(), invoice.businessLineId()));
                 if (line.taxRateId() != null && line.taxAmount().isPositive()) {
                     // Sales tax is credited to its liability account, never to income: it is the state's money.
                     SalesTaxModels.Rate rate = salesTax.get(orgId, entityId, line.taxRateId());
@@ -531,7 +550,7 @@ public class BillingService {
     private BillingModels.Invoice loadInvoice(UUID entityId, UUID invoiceId) {
         Map<String, Object> row = db.sql("""
                 select id, entity_id, customer_id, invoice_number, issue_date, due_date, terms, memo, total_minor,
-                       tax_total_minor, currency, status, journal_entry_id,
+                       tax_total_minor, currency, status, journal_entry_id, business_line_id,
                        coalesce((select sum(amount_minor) from ar_ap.payment_application where invoice_id = ar_ap.invoice.id), 0) as paid_minor,
                        coalesce((select sum(ca.amount_minor) from ar_ap.credit_application ca
                                  join ar_ap.credit_note cn on cn.id = ca.credit_note_id
@@ -561,7 +580,7 @@ public class BillingService {
                 (String) row.get("invoice_number"), date(row.get("issue_date")), date(row.get("due_date")),
                 (String) row.get("terms"), (String) row.get("memo"), total, paid,
                 total.subtract(paid).subtract(credited), (String) row.get("status"),
-                (UUID) row.get("journal_entry_id"), lines, taxTotal, credited);
+                (UUID) row.get("journal_entry_id"), lines, taxTotal, credited, (UUID) row.get("business_line_id"));
     }
 
     private BillingModels.Payment loadPayment(UUID entityId, UUID paymentId) {

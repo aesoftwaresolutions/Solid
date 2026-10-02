@@ -40,7 +40,7 @@ class BillingController {
     record InvoiceRequest(@NotNull UUID customerId, @NotNull LocalDate issueDate,
                           @NotNull @Pattern(regexp = "due_on_receipt|net_15|net_30|net_60") String terms,
                           @Size(max = 40) String invoiceNumber, @Size(max = 500) String memo,
-                          @NotEmpty @Size(max = 200) List<@Valid LineRequest> lines) {
+                          @NotEmpty @Size(max = 200) List<@Valid LineRequest> lines, UUID businessLineId) {
     }
 
     record ApplicationRequest(@NotNull UUID invoiceId, @NotNull Money amount) {
@@ -96,14 +96,14 @@ class BillingController {
     BillingModels.Invoice createInvoice(@PathVariable UUID orgId, @PathVariable UUID entityId,
                                         @Valid @RequestBody InvoiceRequest body) {
         return billing.createInvoice(orgId, entityId, body.customerId(), body.issueDate(), body.terms(),
-                body.invoiceNumber(), body.memo(), lines(body));
+                body.invoiceNumber(), body.memo(), lines(body), body.businessLineId());
     }
 
     @PatchMapping("/invoices/{invoiceId}")
     BillingModels.Invoice updateInvoice(@PathVariable UUID orgId, @PathVariable UUID entityId,
                                         @PathVariable UUID invoiceId, @Valid @RequestBody InvoiceRequest body) {
         return billing.updateDraft(orgId, entityId, invoiceId, body.customerId(), body.issueDate(), body.terms(),
-                body.memo(), lines(body));
+                body.memo(), lines(body), body.businessLineId());
     }
 
     @GetMapping("/invoices/{invoiceId}/pdf")

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, formatMoney, type Account, type Bill, type Vendor } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
+import { BusinessLineSelect } from './BusinessLines';
 
 const TERMS = ['due_on_receipt', 'net_15', 'net_30', 'net_60'];
 
@@ -328,6 +329,8 @@ function NewBill({
   const [expenseAccountId, setExpenseAccountId] = useState(
     vendors[0].defaultExpenseAccountId ?? expenseAccounts[0].id,
   );
+  const [businessLineId, setBusinessLineId] = useState('');
+  const businessLines = useLoader(() => api.businessLines(orgId, entityId), [orgId, entityId]);
   const [error, setError] = useState<unknown>(undefined);
   const [busy, setBusy] = useState(false);
 
@@ -342,6 +345,7 @@ function NewBill({
             vendorId,
             billDate,
             terms,
+            businessLineId: businessLineId || undefined,
             lines: [
               { description: description.trim(), amount: { amount, currency: 'USD' }, expenseAccountId },
             ],
@@ -356,6 +360,7 @@ function NewBill({
       }}
     >
       <ErrorMessage error={error} />
+      <BusinessLineSelect lines={businessLines.value} value={businessLineId} onChange={setBusinessLineId} />
       <label>
         Vendor
         <select value={vendorId} onChange={(e) => setVendorId(e.target.value)}>

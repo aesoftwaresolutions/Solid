@@ -15,7 +15,11 @@ final class JournalHasher {
 
     static final String GENESIS = "0".repeat(64);
 
-    record HashLine(int lineNo, UUID accountId, long amountMinor, String currency) {
+    /**
+     * @param businessLineId covered by the hash only when present, so entries posted before business lines existed
+     *                       (spec 069) hash exactly as they always did
+     */
+    record HashLine(int lineNo, UUID accountId, long amountMinor, String currency, UUID businessLineId) {
     }
 
     private JournalHasher() {
@@ -31,7 +35,8 @@ final class JournalHasher {
         lines.stream()
                 .sorted((a, b) -> Integer.compare(a.lineNo(), b.lineNo()))
                 .forEach(l -> canonical.append('|').append(l.lineNo()).append(':').append(l.accountId())
-                        .append(':').append(l.amountMinor()).append(':').append(l.currency()));
+                        .append(':').append(l.amountMinor()).append(':').append(l.currency())
+                        .append(l.businessLineId() == null ? "" : ":bl=" + l.businessLineId()));
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(canonical.toString().getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);

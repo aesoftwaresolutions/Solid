@@ -28,6 +28,7 @@ Sign in (with two-factor), create an organization and its entities, and:
 | **Purchases** | Vendors, bills, payments, A/P aging, 1099-NEC candidate tracking |
 | **Assets & deductions** | Fixed assets with straight-line depreciation and disposal, mileage log, home-office declaration |
 | **Planning** | Cash-flow schedule from due dates and repeating templates, with the lowest point called out |
+| **Business lines** | Tag invoices, bills, bank transactions and journal lines with a facet of the business and see the profit & loss per facet — tax lines unchanged ([spec 069](docs/specs/069-business-lines.md)) |
 | **Personal** | Household chart of accounts, monthly budgets, budget vs actual |
 | **Documents** | An encrypted vault for receipts and paperwork, linked to the records they support; letterhead per entity (logo, address, payment instructions) |
 | **Reports** | Trial balance, P&L, balance sheet, tax-line report with a readiness check, year-end checklist, full CSV export |
@@ -115,6 +116,7 @@ backend/        Java 21, Spring Boot, Spring Modulith, Flyway, PostgreSQL 16
 frontend/       React 19 + TypeScript + Vite; one stylesheet, themeable via CSS variables (dark mode included)
 mcp/            MCP server for LLM agents (Node, stdio; read-mostly tool set)
 ops/            backup.sh, restore.sh, smoke-test.py, deploy/, desktop/ (installer builds)
+business/       How AE Software Solutions is organized — one folder per business facet (public: no client data)
 LICENSE         Proprietary — see the file
 SECURITY.md     How to report a vulnerability
 CHANGELOG.md    Release notes

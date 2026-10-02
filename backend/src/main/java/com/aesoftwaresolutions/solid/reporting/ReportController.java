@@ -16,10 +16,12 @@ class ReportController {
     private final TaxLineReportService taxLines;
     private final CashFlowService cashFlow;
     private final WhatsComingService whatsComing;
+    private final BusinessLineReportService byBusinessLine;
 
     ReportController(ReportService reports, TaxLineReportService taxLines, CashFlowService cashFlow,
-                     WhatsComingService whatsComing) {
+                     WhatsComingService whatsComing, BusinessLineReportService byBusinessLine) {
         this.whatsComing = whatsComing;
+        this.byBusinessLine = byBusinessLine;
         this.reports = reports;
         this.taxLines = taxLines;
         this.cashFlow = cashFlow;
@@ -72,6 +74,24 @@ class ReportController {
     Reports.ProfitAndLoss profitAndLoss(@PathVariable UUID orgId, @PathVariable UUID entityId,
                                         @RequestParam LocalDate from, @RequestParam LocalDate to) {
         return reports.profitAndLoss(orgId, entityId, from, to);
+    }
+
+    @GetMapping("/profit-and-loss-by-business-line")
+    Reports.ProfitAndLossByBusinessLine profitAndLossByBusinessLine(@PathVariable UUID orgId, @PathVariable UUID entityId,
+                                                                    @RequestParam LocalDate from,
+                                                                    @RequestParam LocalDate to) {
+        return byBusinessLine.profitAndLoss(orgId, entityId, from, to);
+    }
+
+    @GetMapping(path = "/profit-and-loss-by-business-line.csv", produces = "text/csv")
+    org.springframework.http.ResponseEntity<String> profitAndLossByBusinessLineCsv(
+            @PathVariable UUID orgId, @PathVariable UUID entityId, @RequestParam LocalDate from,
+            @RequestParam LocalDate to) {
+        Reports.ProfitAndLossByBusinessLine report = byBusinessLine.profitAndLoss(orgId, entityId, from, to);
+        return org.springframework.http.ResponseEntity.ok()
+                .header("Content-Disposition",
+                        "attachment; filename=\"solid-pl-by-business-line-" + from + "-to-" + to + ".csv\"")
+                .body(byBusinessLine.csv(report));
     }
 
     @GetMapping("/balance-sheet")

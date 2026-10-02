@@ -135,8 +135,13 @@ public class CreditNoteService {
             Account receivable = billing.receivableAccount(orgId, entityId);
             List<JournalService.NewLine> journalLines = new ArrayList<>();
             for (BillingModels.CreditNoteLine line : credit.lines()) {
+                // Taking back a charge takes it back from the business line it was earned in (spec 069). A credit
+                // with no invoice line behind it is unassigned.
+                UUID businessLineId = line.invoiceLineId() == null ? null : db.sql("""
+                        select i.business_line_id from ar_ap.invoice_line il join ar_ap.invoice i on i.id = il.invoice_id
+                        where il.id = ?""").param(line.invoiceLineId()).query(UUID.class).optional().orElse(null);
                 journalLines.add(new JournalService.NewLine(line.incomeAccountId(), line.amount(),
-                        line.description()));
+                        line.description(), businessLineId));
                 if (line.taxRateId() != null && line.taxAmount().isPositive()) {
                     // The tax goes back out of the liability account it was credited to: the entity owes the
                     // state less by exactly what it is reversing.
@@ -146,7 +151,7 @@ public class CreditNoteService {
                 }
             }
             journalLines.add(new JournalService.NewLine(receivable.id(), credit.total().negate(), null));
-            JournalEntry entry = journal.postFromSource(orgId, entityId, credit.issueDate(),
+            JournalEntry entry = journal.postTakingBackFromSource(orgId, entityId, credit.issueDate(),
                     "Credit note " + credit.creditNumber(), journalLines, "credit_note", creditNoteId);
             db.sql("update ar_ap.credit_note set status = 'issued', journal_entry_id = ? where id = ?")
                     .params(entry.id(), creditNoteId).update();
