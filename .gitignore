@@ -10,3 +10,8 @@ CLAUDE.local.md
 .idea/
 .vscode/
 *.iml
+# Business folder: the repo is public, so private material and data exports never get committed
+business/**/private/
+business/**/*.csv
+business/**/*.xlsx
+business/**/*.env

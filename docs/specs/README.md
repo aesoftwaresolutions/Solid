@@ -68,5 +68,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 062 | Forms that line up | [062](062-forms-that-line-up.md) | Done (owner review) | 011, 061 |
 | 063 | A window of its own | [063](063-a-window-of-its-own.md) | Done (owner review) | 060 |
 | 064 | Closed means closed | [064](064-closed-means-closed.md) | Done (owner review) | 063 |
+| 069 | Business lines (what each part of the business earns) | [069](069-business-lines.md) | In review | 005, 006, 008, 012, 013, 057 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

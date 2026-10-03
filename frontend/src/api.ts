@@ -136,6 +136,41 @@ export interface ProfitAndLoss {
   netIncome: Money;
 }
 
+/** A facet of the business that the books report on separately (spec 069). */
+export interface BusinessLine {
+  id: string;
+  entityId: string;
+  name: string;
+  isArchived: boolean;
+}
+
+/** One column of the P&L by business line; businessLineId null is "Shared / overhead". */
+export interface BusinessLineColumn {
+  businessLineId: string | null;
+  name: string;
+  archived: boolean;
+  income: Money;
+  costOfGoodsSold: Money;
+  grossProfit: Money;
+  expenses: Money;
+  netIncome: Money;
+}
+
+export interface ProfitAndLossByBusinessLine {
+  from: string;
+  to: string;
+  columns: BusinessLineColumn[];
+  rows: {
+    accountId: string;
+    code: string;
+    name: string;
+    section: 'income' | 'costOfGoodsSold' | 'expenses';
+    amounts: Money[];
+    total: Money;
+  }[];
+  total: BusinessLineColumn;
+}
+
 export interface BalanceSheet {
   asOf: string;
   assets: Section;
@@ -207,6 +242,7 @@ export interface Invoice {
   lines: InvoiceLine[];
   /** Credit notes pointed at this invoice: money that was never owed rather than money that arrived. */
   creditsApplied: Money;
+  businessLineId: string | null;
 }
 
 export interface CreditApplication {
@@ -278,6 +314,7 @@ export interface Bill {
   balanceDue: Money;
   status: string;
   lines: BillLine[];
+  businessLineId: string | null;
 }
 
 export interface AgingBucket {
@@ -378,6 +415,7 @@ export interface JournalLine {
   accountId: string;
   amount: Money;
   memo: string | null;
+  businessLineId: string | null;
 }
 
 export interface JournalEntry {
@@ -983,10 +1021,10 @@ export const api = {
   },
   bankTransactions: (orgId: string, entityId: string, status = 'new') =>
     request<BankTransaction[]>(`/orgs/${orgId}/entities/${entityId}/bank-transactions?status=${status}`),
-  categorize: (orgId: string, entityId: string, txnId: string, accountId: string) =>
+  categorize: (orgId: string, entityId: string, txnId: string, accountId: string, businessLineId?: string) =>
     request<BankTransaction>(`/orgs/${orgId}/entities/${entityId}/bank-transactions/${txnId}/categorize`, {
       method: 'POST',
-      ...json({ accountId }),
+      ...json({ accountId, businessLineId: businessLineId || undefined }),
     }),
   excludeTransaction: (orgId: string, entityId: string, txnId: string) =>
     request<BankTransaction>(`/orgs/${orgId}/entities/${entityId}/bank-transactions/${txnId}/exclude`, {
@@ -1009,6 +1047,7 @@ export const api = {
       terms: string;
       memo?: string;
       lines: { description: string; quantity: string; unitPrice: Money; incomeAccountId: string; taxRateId?: string }[];
+      businessLineId?: string;
     },
   ) => request<Invoice>(`/orgs/${orgId}/entities/${entityId}/invoices`, { method: 'POST', ...json(body) }),
   finalizeInvoice: (orgId: string, entityId: string, invoiceId: string) =>
@@ -1048,6 +1087,7 @@ export const api = {
       vendorReference?: string;
       memo?: string;
       lines: { description: string; amount: Money; expenseAccountId: string }[];
+      businessLineId?: string;
     },
   ) => request<Bill>(`/orgs/${orgId}/entities/${entityId}/bills`, { method: 'POST', ...json(body) }),
   approveBill: (orgId: string, entityId: string, billId: string) =>
@@ -1137,7 +1177,11 @@ export const api = {
     }),
   deleteCategorizationRule: (orgId: string, entityId: string, ruleId: string) =>
     request<void>(`/orgs/${orgId}/entities/${entityId}/categorization-rules/${ruleId}`, { method: 'DELETE' }),
-  categorizeAll: (orgId: string, entityId: string, items: { id: string; accountId: string }[]) =>
+  categorizeAll: (
+    orgId: string,
+    entityId: string,
+    items: { id: string; accountId: string; businessLineId?: string }[],
+  ) =>
     request<BankTransaction[]>(`/orgs/${orgId}/entities/${entityId}/bank-transactions/categorize`, {
       method: 'POST',
       ...json({ items }),
@@ -1453,6 +1497,26 @@ export const api = {
   cashFlow: (orgId: string, entityId: string, from: string, to: string) =>
     request<CashFlow>(`/orgs/${orgId}/entities/${entityId}/reports/cash-flow?from=${from}&to=${to}`),
 
+  businessLines: (orgId: string, entityId: string) =>
+    request<BusinessLine[]>(`/orgs/${orgId}/entities/${entityId}/business-lines`),
+  createBusinessLine: (orgId: string, entityId: string, name: string) =>
+    request<BusinessLine>(`/orgs/${orgId}/entities/${entityId}/business-lines`, { method: 'POST', ...json({ name }) }),
+  updateBusinessLine: (
+    orgId: string,
+    entityId: string,
+    lineId: string,
+    changes: { name?: string; archived?: boolean },
+  ) =>
+    request<BusinessLine>(`/orgs/${orgId}/entities/${entityId}/business-lines/${lineId}`, {
+      method: 'PATCH',
+      ...json(changes),
+    }),
+  profitAndLossByBusinessLine: (orgId: string, entityId: string, from: string, to: string) =>
+    request<ProfitAndLossByBusinessLine>(
+      `/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss-by-business-line?from=${from}&to=${to}`,
+    ),
+  profitAndLossByBusinessLineCsvUrl: (orgId: string, entityId: string, from: string, to: string) =>
+    `/api/v1/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss-by-business-line.csv?from=${from}&to=${to}`,
   profitAndLoss: (orgId: string, entityId: string, from: string, to: string) =>
     request<ProfitAndLoss>(`/orgs/${orgId}/entities/${entityId}/reports/profit-and-loss?from=${from}&to=${to}`),
   balanceSheet: (orgId: string, entityId: string, asOf: string) =>

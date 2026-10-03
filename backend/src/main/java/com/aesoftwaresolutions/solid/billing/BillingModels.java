@@ -25,11 +25,12 @@ public final class BillingModels {
      * @param total   what the customer owes: the lines plus any sales tax
      * @param taxTotal sales tax charged — money held for the state, never income
      * @param creditsApplied credit notes pointed at this invoice; money that was never owed rather than paid
+     * @param businessLineId the facet of the business this sale belongs to (spec 069); null = unassigned
      */
     public record Invoice(UUID id, UUID entityId, UUID customerId, String invoiceNumber, LocalDate issueDate,
                           LocalDate dueDate, String terms, String memo, Money total, Money amountPaid,
                           Money balanceDue, String status, UUID journalEntryId, List<InvoiceLine> lines,
-                          Money taxTotal, Money creditsApplied) {
+                          Money taxTotal, Money creditsApplied, UUID businessLineId) {
     }
 
     /**

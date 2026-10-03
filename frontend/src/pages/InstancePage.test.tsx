@@ -85,6 +85,12 @@ describe('spec 027: instance admin area', () => {
 describe('spec 049: tax figures added on this installation', () => {
   test('adds a figure with its source and lists what is in use', async () => {
     const { calls } = mockApi({
+      // renderApp mounts the auth provider, which asks who is signed in; unanswered, that rejection leaks.
+      'GET /api/v1/auth/me': {
+        user: { id: 'u1', email: 'admin@example.test', displayName: 'Admin', mfaEnabled: true, isInstanceAdmin: true },
+        mfaVerified: true,
+        organizationIds: [],
+      },
       'GET /api/v1/system/info': { name: 'Solid', version: '0.1.0', databaseSchemaVersion: '202609210003' },
       'GET /api/v1/instance/backup-status': { detail: 'nope' },
       'GET /api/v1/tax-rules': [],

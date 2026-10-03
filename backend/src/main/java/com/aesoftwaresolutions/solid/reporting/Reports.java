@@ -29,6 +29,25 @@ public final class Reports {
                                 Section costOfGoodsSold, Money grossProfit, Section expenses, Money netIncome) {
     }
 
+    /**
+     * One column of the profit and loss by business line (spec 069). {@code businessLineId} null is the
+     * "Shared / overhead" column: everything posted without a business line.
+     */
+    public record BusinessLineColumn(UUID businessLineId, String name, boolean archived, Money income,
+                                     Money costOfGoodsSold, Money grossProfit, Money expenses, Money netIncome) {
+    }
+
+    /** One income or expense account across the columns. {@code amounts} lines up with the report's columns. */
+    public record BusinessLineRow(UUID accountId, String code, String name, String section, List<Money> amounts,
+                                  Money total) {
+    }
+
+    /** The profit and loss split by business line. The {@code total} column always equals the plain P&amp;L. */
+    public record ProfitAndLossByBusinessLine(LocalDate from, LocalDate to, String currency,
+                                              List<BusinessLineColumn> columns, List<BusinessLineRow> rows,
+                                              BusinessLineColumn total) {
+    }
+
     public record CashFlowSection(List<Row> rows, Money total) {
     }
 

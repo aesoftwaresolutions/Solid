@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,13 +51,23 @@ class EstimatedTaxApiTests {
         jdbc.update("update iam.user_account set is_instance_admin = true where email = ?", admin.email());
     }
 
+    /** The runtime wage base ac7 supplies is instance-wide: left behind, it changes every later worksheet. */
+    @AfterEach
+    void forgetRuntimeWageBase() {
+        jdbc.update("delete from tax.figure where figure_key = 'se_wage_base'");
+    }
+
     private void profit(String amount, String year) {
+        if (new java.math.BigDecimal(amount).signum() == 0) {
+            return; // no profit is no entry: the books refuse a line of zero
+        }
         Map<String, Object> body = new HashMap<>();
         body.put("entryDate", year + "-06-15");
         body.put("post", true);
         body.put("lines", List.of(
-                Map.of("accountId", acct.get("1010"), "amount", Map.of("amount", "-" + amount, "currency", "USD")),
-                Map.of("accountId", acct.get("4010"), "amount", Map.of("amount", amount, "currency", "USD"))));
+                // A sale: money into the bank (debit, positive) and income earned (credit, negative).
+                Map.of("accountId", acct.get("1010"), "amount", Map.of("amount", amount, "currency", "USD")),
+                Map.of("accountId", acct.get("4010"), "amount", Map.of("amount", "-" + amount, "currency", "USD"))));
         api.post(baseMap + "/journal-entries", body, HttpStatus.CREATED);
     }
 

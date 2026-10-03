@@ -32,10 +32,10 @@ class BankController {
                              @Size(max = 120) String institution, @Pattern(regexp = "[0-9]{2,4}") String mask) {
     }
 
-    record Categorize(@NotNull UUID accountId, @Size(max = 500) String memo) {
+    record Categorize(@NotNull UUID accountId, @Size(max = 500) String memo, UUID businessLineId) {
     }
 
-    record BulkItem(@NotNull UUID id, @NotNull UUID accountId) {
+    record BulkItem(@NotNull UUID id, @NotNull UUID accountId, UUID businessLineId) {
     }
 
     record BulkCategorize(@NotEmpty @Size(max = 500) List<@Valid BulkItem> items) {
@@ -91,14 +91,14 @@ class BankController {
     @PostMapping("/bank-transactions/{txnId}/categorize")
     BankModels.BankTransaction categorize(@PathVariable UUID orgId, @PathVariable UUID entityId, @PathVariable UUID txnId,
                                           @Valid @RequestBody Categorize body) {
-        return bank.categorize(orgId, entityId, txnId, body.accountId(), body.memo());
+        return bank.categorize(orgId, entityId, txnId, body.accountId(), body.memo(), body.businessLineId());
     }
 
     @PostMapping("/bank-transactions/categorize")
     List<BankModels.BankTransaction> categorizeAll(@PathVariable UUID orgId, @PathVariable UUID entityId,
                                                    @Valid @RequestBody BulkCategorize body) {
         return bank.categorizeAll(orgId, entityId, body.items().stream()
-                .map(i -> new BankService.CategorizeItem(i.id(), i.accountId())).toList());
+                .map(i -> new BankService.CategorizeItem(i.id(), i.accountId(), i.businessLineId())).toList());
     }
 
     @PostMapping("/bank-transactions/{txnId}/exclude")

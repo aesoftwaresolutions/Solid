@@ -33,7 +33,11 @@ public class BankService {
     static final int MAX_FILE_BYTES = 5 * 1024 * 1024;
     static final int MAX_ROWS = 20_000;
 
-    public record CategorizeItem(UUID transactionId, UUID accountId) {
+    /** @param businessLineId the facet this transaction belongs to (spec 069); null = shared or unassigned */
+    public record CategorizeItem(UUID transactionId, UUID accountId, UUID businessLineId) {
+        public CategorizeItem(UUID transactionId, UUID accountId) {
+            this(transactionId, accountId, null);
+        }
     }
 
     private final JdbcClient db;
@@ -180,8 +184,13 @@ public class BankService {
     }
 
     public BankModels.BankTransaction categorize(UUID orgId, UUID entityId, UUID txnId, UUID accountId, String memo) {
+        return categorize(orgId, entityId, txnId, accountId, memo, null);
+    }
+
+    public BankModels.BankTransaction categorize(UUID orgId, UUID entityId, UUID txnId, UUID accountId, String memo,
+                                                 UUID businessLineId) {
         orgs.getEntity(orgId, entityId);
-        return orgScope.call(orgId, () -> categorizeInScope(orgId, entityId, txnId, accountId, memo));
+        return orgScope.call(orgId, () -> categorizeInScope(orgId, entityId, txnId, accountId, memo, businessLineId));
     }
 
     /** All-or-nothing: one failure rolls back every item. */
@@ -191,7 +200,8 @@ public class BankService {
             throw new IllegalArgumentException("Send between 1 and 500 items");
         }
         return orgScope.call(orgId, () -> items.stream()
-                .map(i -> categorizeInScope(orgId, entityId, i.transactionId(), i.accountId(), null)).toList());
+                .map(i -> categorizeInScope(orgId, entityId, i.transactionId(), i.accountId(), null, i.businessLineId()))
+                .toList());
     }
 
     public BankModels.BankTransaction exclude(UUID orgId, UUID entityId, UUID txnId) {
@@ -275,7 +285,8 @@ public class BankService {
 
     // ---------------- internals (inside org scope) ----------------
 
-    private BankModels.BankTransaction categorizeInScope(UUID orgId, UUID entityId, UUID txnId, UUID accountId, String memo) {
+    private BankModels.BankTransaction categorizeInScope(UUID orgId, UUID entityId, UUID txnId, UUID accountId, String memo,
+                                                         UUID businessLineId) {
         BankModels.BankTransaction txn = lockTxn(entityId, txnId);
         if (!txn.status().equals("new")) {
             throw new BusinessRuleException("ALREADY_CATEGORIZED", "Transaction is already " + txn.status());
@@ -287,7 +298,8 @@ public class BankService {
         String description = memo != null && !memo.isBlank() ? memo : txn.description();
         JournalEntry entry = journal.postFromSource(orgId, entityId, txn.postedDate(), truncate(description, 500), List.of(
                 new JournalService.NewLine(bankAccount.glAccountId(), txn.amount(), null),
-                new JournalService.NewLine(accountId, txn.amount().negate(), null)), "bank", txnId);
+                // Only the category side carries the business line: the bank side is a balance-sheet line.
+                new JournalService.NewLine(accountId, txn.amount().negate(), null, businessLineId)), "bank", txnId);
         db.sql("update bank.bank_txn set status = 'categorized', journal_entry_id = ?, category_account_id = ? where id = ?")
                 .params(entry.id(), accountId, txnId).update();
         return findTxn(entityId, txnId);

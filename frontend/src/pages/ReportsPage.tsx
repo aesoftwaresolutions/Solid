@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, formatMoney, type Section } from '../api';
 import { Card, ErrorMessage, Loading, useLoader } from '../components';
+import { ProfitAndLossByBusinessLineCard } from './BusinessLines';
 
 function SectionTable({ title, section }: { title: string; section: Section }) {
   return (
@@ -78,6 +79,8 @@ export default function ReportsPage() {
           </>
         )}
       </Card>
+
+      <ProfitAndLossByBusinessLineCard orgId={orgId} entityId={entityId} from={from} to={to} />
 
       <Card title={`Balance sheet as of ${to}`}>
         <ErrorMessage error={bs.error} />

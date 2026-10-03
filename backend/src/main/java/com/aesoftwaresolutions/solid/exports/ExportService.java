@@ -12,6 +12,7 @@ import com.aesoftwaresolutions.solid.docs.DocumentService;
 import com.aesoftwaresolutions.solid.ledger.Account;
 import com.aesoftwaresolutions.solid.ledger.AccountService;
 import com.aesoftwaresolutions.solid.ledger.JournalEntry;
+import com.aesoftwaresolutions.solid.ledger.BusinessLineService;
 import com.aesoftwaresolutions.solid.ledger.JournalService;
 import com.aesoftwaresolutions.solid.org.LegalEntity;
 import com.aesoftwaresolutions.solid.org.OrgService;
@@ -41,10 +42,11 @@ public class ExportService {
     private final DocumentService documents;
     private final AuditLog audit;
     private final Clock clock;
+    private final BusinessLineService businessLines;
 
     ExportService(OrgService orgs, AccountService accounts, JournalService journal, BankService bank,
                   BillingService billing, PayableService payables, DocumentService documents, AuditLog audit,
-                  Clock clock) {
+                  Clock clock, BusinessLineService businessLines) {
         this.orgs = orgs;
         this.accounts = accounts;
         this.journal = journal;
@@ -54,6 +56,7 @@ public class ExportService {
         this.documents = documents;
         this.audit = audit;
         this.clock = clock;
+        this.businessLines = businessLines;
     }
 
     public byte[] exportEntity(UUID orgId, UUID entityId) {
@@ -66,6 +69,7 @@ public class ExportService {
             write(zip, "accounts.csv", accountsCsv(orgId, entityId));
             write(zip, "journal-entries.csv", entriesCsv(orgId, entityId));
             write(zip, "journal-lines.csv", linesCsv(orgId, entityId));
+            write(zip, "business-lines.csv", businessLinesCsv(orgId, entityId));
             write(zip, "bank-transactions.csv", bankCsv(orgId, entityId));
             write(zip, "invoices.csv", invoicesCsv(orgId, entityId));
             write(zip, "bills.csv", billsCsv(orgId, entityId));
@@ -96,7 +100,8 @@ public class ExportService {
                 Every file here is UTF-8 CSV with a header row. Amounts are plain decimal strings with the currency
                 in its own column; dates are ISO-8601 (2026-09-18). The id columns are the same ids the API uses, so
                 journal-lines.csv joins to journal-entries.csv on entry_id, and both join to accounts.csv on
-                account_id.
+                account_id. journal-lines.csv joins to business-lines.csv on business_line_id; an empty
+                business_line_id means the line was shared or not assigned to a business line.
 
                 A field that begins with = + - or @ is written with a leading apostrophe so that a spreadsheet opens
                 it as text instead of running it as a formula. Remove the apostrophe if you need the raw text.
@@ -130,13 +135,22 @@ public class ExportService {
         return csv.toString();
     }
 
+    private String businessLinesCsv(UUID orgId, UUID entityId) {
+        StringBuilder csv = new StringBuilder(Csv.row("business_line_id", "name", "is_archived"));
+        for (BusinessLineService.BusinessLine line : businessLines.list(orgId, entityId)) {
+            csv.append(Csv.row(line.id(), line.name(), line.isArchived()));
+        }
+        return csv.toString();
+    }
+
     private String linesCsv(UUID orgId, UUID entityId) {
         StringBuilder csv = new StringBuilder(Csv.row("entry_id", "line_no", "account_id", "amount", "currency",
-                "memo", "entry_date", "status"));
+                "memo", "entry_date", "status", "business_line_id"));
         for (JournalEntry entry : allEntries(orgId, entityId)) {
             for (JournalEntry.Line line : entry.lines()) {
                 csv.append(Csv.row(entry.id(), line.lineNo(), line.accountId(), line.amount().toDecimalString(),
-                        line.amount().currency(), line.memo(), entry.entryDate(), entry.status()));
+                        line.amount().currency(), line.memo(), entry.entryDate(), entry.status(),
+                        line.businessLineId()));
             }
         }
         return csv.toString();
