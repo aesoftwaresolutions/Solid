@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The trusted-device pair of calls (spec 068). Both live under {@code /auth/mfa/**} because they are part of
+ * The trusted-device pair of calls (spec 070). Both live under {@code /auth/mfa/**} because they are part of
  * the second-factor flow: one is how a machine earns the cookie (after a code was just proven), the other is
  * how a fresh pending session trades that cookie for skipping the code this time.
  */

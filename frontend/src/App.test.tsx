@@ -89,6 +89,62 @@ describe('spec 011 AC 1-2: login and MFA', () => {
   });
 });
 
+describe('spec 070: trust this computer', () => {
+  test('a trusted computer goes straight in after the password', async () => {
+    const user = userEvent.setup();
+    let verified = false;
+    const { calls } = mockApi({
+      'GET /api/v1/auth/me': () => (verified ? ME_READY : { detail: 'Please log in', status: 401, code: 'UNAUTHENTICATED' }),
+      'POST /api/v1/auth/login': { mfaEnrolled: true },
+      'POST /api/v1/auth/mfa/trusted-check': () => {
+        verified = true;
+        return {};
+      },
+      'GET /api/v1/orgs': [],
+    }, { status: { 'GET /api/v1/auth/me': 200 } });
+
+    renderApp();
+    await user.type(await screen.findByLabelText('Email'), 'a@b.test');
+    await user.type(screen.getByLabelText('Password'), 'correct horse battery staple');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(await screen.findByRole('heading', { name: 'Organizations' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Two-factor code' })).not.toBeInTheDocument();
+    expect(calls.some((c) => c.key === 'POST /api/v1/auth/mfa/verify')).toBe(false);
+  });
+
+  test('an untrusted computer asks for the code, and trusts it only when ticked', async () => {
+    const user = userEvent.setup();
+    let verified = false;
+    const { calls } = mockApi({
+      'GET /api/v1/auth/me': () => (verified ? ME_READY : { detail: 'Please log in', status: 401, code: 'UNAUTHENTICATED' }),
+      'POST /api/v1/auth/login': { mfaEnrolled: true },
+      'POST /api/v1/auth/mfa/trusted-check': { detail: 'This device is not trusted for this account', code: 'DEVICE_NOT_TRUSTED' },
+      'POST /api/v1/auth/mfa/verify': () => {
+        verified = true;
+        return {};
+      },
+      'POST /api/v1/auth/mfa/trusted-device': { trustedForDays: 30 },
+      'GET /api/v1/orgs': [],
+    }, { status: { 'GET /api/v1/auth/me': 200, 'POST /api/v1/auth/mfa/trusted-check': 404 } });
+
+    renderApp();
+    await user.type(await screen.findByLabelText('Email'), 'a@b.test');
+    await user.type(screen.getByLabelText('Password'), 'correct horse battery staple');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(await screen.findByRole('heading', { name: 'Two-factor code' })).toBeInTheDocument();
+    const trust = screen.getByLabelText('Trust this computer for 30 days');
+    expect(trust).not.toBeChecked();
+    await user.click(trust);
+    await user.type(screen.getByLabelText('6-digit code'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Verify' }));
+
+    expect(await screen.findByRole('heading', { name: 'Organizations' })).toBeInTheDocument();
+    await waitFor(() => expect(calls.some((c) => c.key === 'POST /api/v1/auth/mfa/trusted-device')).toBe(true));
+  });
+});
+
 describe('spec 011 AC 3: review queue', () => {
   const accounts = [
     { id: 'a-6220', code: '6220', name: 'Software and Subscriptions', type: 'expense', subtype: null, parentId: null, isHeader: false, taxLineCode: 'F1040.SCH_C.L27b', isArchived: false },

@@ -26,6 +26,7 @@ class RowLevelSecurityTests {
             "org.organization",      // visibility controlled by iam.membership (OrgAccessInterceptor)
             "iam.user_account",      // identity spans organizations
             "iam.session",           // identity spans organizations
+            "iam.trusted_device",    // identity spans organizations (spec 070)
             "iam.mfa_recovery_code", // identity spans organizations
             "iam.membership",        // needed to decide org access before an org scope exists
             // Read while nobody is signed in (accepting an invitation is how an outsider gets an account),

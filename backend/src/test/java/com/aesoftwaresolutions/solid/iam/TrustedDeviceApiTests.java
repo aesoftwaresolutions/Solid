@@ -21,7 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** Spec 068: a trusted device skips the authenticator code for a bounded time after proving it once. */
+/** Spec 070: a trusted device skips the authenticator code for a bounded time after proving it once. */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @Import(TestcontainersConfiguration.class)
 class TrustedDeviceApiTests {
@@ -61,8 +61,10 @@ class TrustedDeviceApiTests {
         ResponseEntity<JsonNode> response = rest.exchange("/api/v1/auth/mfa/trusted-device", HttpMethod.POST,
                 new HttpEntity<>(headersOf(bearer)), JsonNode.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        String setCookie = response.getHeaders().getFirst(HttpHeaders.SET_COOKIE);
-        assertThat(setCookie).as("the device token is only ever in the cookie header").contains("solid_device=");
+        String setCookie = response.getHeaders().getOrEmpty(HttpHeaders.SET_COOKIE).stream()
+                .filter(c -> c.startsWith("solid_device=")).findFirst().orElse(null);
+        assertThat(setCookie).as("the device token is only ever in the cookie header").isNotNull();
+        assertThat(setCookie).contains("HttpOnly").contains("SameSite=Strict").contains("Path=/api/v1/auth");
         return setCookie.split(";")[0].substring("solid_device=".length());
     }
 
@@ -150,6 +152,53 @@ class TrustedDeviceApiTests {
 
         String session = tokenOf(login(deviceCookie));
         assertThat(trustedCheck(session, deviceCookie)).isEqualTo(404);
+    }
+
+    /**
+     * Security: the password alone must never be enough. A session still waiting for its code may not mint a
+     * device token, or it could trust itself and skip the code it never entered.
+     */
+    @Test
+    void sec1_aSessionThatHasNotProvenTheCodeCannotTrustItself() {
+        String pending = tokenOf(login(null));
+        ResponseEntity<JsonNode> minted = rest.exchange("/api/v1/auth/mfa/trusted-device", HttpMethod.POST,
+                new HttpEntity<>(headersOf(pending)), JsonNode.class);
+        assertThat(minted.getStatusCode()).as("no device token before the code").isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(minted.getHeaders().getOrEmpty(HttpHeaders.SET_COOKIE))
+                .noneMatch(c -> c.startsWith("solid_device="));
+        assertThat(jdbc.queryForObject("select count(*) from iam.trusted_device where user_id = "
+                + "(select id from iam.user_account where email = ?)", Integer.class, user.email())).isZero();
+
+        assertThat(rest.exchange("/api/v1/orgs", HttpMethod.GET, new HttpEntity<>(headersOf(pending)),
+                JsonNode.class).getStatusCode()).as("still needs the code").isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void sec2_skippingTheCodeDoesNotEarnTheNextMonth() {
+        String deviceCookie = deviceCookieOf(freshCodeSession());
+        String viaDevice = tokenOf(login(deviceCookie));
+        assertThat(trustedCheck(viaDevice, deviceCookie)).isEqualTo(204);
+
+        ResponseEntity<JsonNode> again = rest.exchange("/api/v1/auth/mfa/trusted-device", HttpMethod.POST,
+                new HttpEntity<>(headersOf(viaDevice)), JsonNode.class);
+        assertThat(again.getStatusCode()).as("only a typed code earns a device token").isEqualTo(HttpStatus.CONFLICT);
+        assertThat(again.getBody().get("code").asText()).isEqualTo("CODE_REQUIRED");
+    }
+
+    @Test
+    void sec3_changingThePasswordForgetsEveryTrustedComputer() {
+        String bearer = freshCodeSession();
+        String deviceCookie = deviceCookieOf(bearer);
+
+        HttpHeaders headers = headersOf(bearer);
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        String newPassword = "a different horse battery staple";
+        assertThat(rest.exchange("/api/v1/auth/change-password", HttpMethod.POST,
+                new HttpEntity<>(Map.of("currentPassword", ApiClient.PASSWORD, "newPassword", newPassword), headers),
+                JsonNode.class).getStatusCode().is2xxSuccessful()).isTrue();
+
+        assertThat(jdbc.queryForObject("select count(*) from iam.trusted_device where user_id = "
+                + "(select id from iam.user_account where email = ?)", Integer.class, user.email())).isZero();
     }
 
     /** Logs in fresh and verifies with a next-step code, the way a real browser does after signing in. */

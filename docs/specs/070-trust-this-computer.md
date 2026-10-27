@@ -1,6 +1,8 @@
-# 068 — Trust this computer (skip the code next time)
+# 070 — Trust this computer (skip the code next time)
 
-**Status:** In progress · **Owner review:** Needed · **Security review:** Needed
+**Status:** In review · **Owner review:** Needed · **Security review:** Done (review of 2026-10-26, findings below fixed)
+
+*Renumbered from 068, which the estimated-tax worksheet already uses.*
 
 ## Goal
 Signing in needs the password and the authenticator code, every time. On the machine where Solid actually
@@ -19,6 +21,12 @@ the account worth protecting (the password, and the code on any new machine) is 
   deleted as they are encountered; there is no scheduler to wait on.
 
 ## Rules
+- **Only a typed code earns a device token.** `trusted-device` refuses a session still waiting for its code
+  (401 `MFA_REQUIRED`) — otherwise the password alone could mint a token and hand it to `trusted-check` — and
+  refuses a session that itself skipped the code through a device (409 `CODE_REQUIRED`), so the 30 days cannot
+  renew themselves. `iam.session.mfa_via_device` records which way a session passed.
+- **A changed or reset password forgets every trusted computer**, in the same transaction that revokes the
+  sessions.
 - The token is 256 random bits, stored hashed. A read of the table yields nothing usable.
 - The shortcut applies only within one account on one machine: a cookie minted for one account does nothing
   for another (`404`, same as unknown).
@@ -38,11 +46,23 @@ the account worth protecting (the password, and the code on any new machine) is 
 3. A cookie minted for one account does nothing on another account.
 4. The raw token never reaches the table (only its hash).
 5. Expired rows are refused and swept on sight.
+6. A session that has not proven the code cannot mint a token, and gets no cookie (`sec1`).
+7. A session promoted by a device cannot mint the next token (`sec2`).
+8. Changing the password leaves no trusted device for that account (`sec3`).
+9. Sign-in screen: a trusted computer goes straight in; otherwise the code screen offers "Trust this computer
+   for 30 days", off by default, and remembers the computer only when ticked. The account page can forget
+   them all.
+
+## Security review (2026-10-26)
+| Finding | Severity | Fix |
+|---|---|---|
+| A session pending MFA could call `trusted-device` (the `/auth/mfa/**` paths admit it), mint a token and pass `trusted-check`: the password alone signed in | Critical | `trusted-device` requires a verified session |
+| A device-promoted session could mint the next token, renewing trust forever without a code | High | `mfa_via_device`; such sessions get 409 |
+| Password change and reset left trusted devices alive | High | Deleted in the same transaction |
+| Migration dated 2026-09-28, before already-applied migrations: Flyway would refuse to start the deployed server | High (outage) | Re-dated `V202610260001` |
 
 ## Left for the owner
-- **A password change currently does not forget trusted devices.** Revoking sessions there already exists;
-  wiring devices into it is a small follow-up and the obvious one a reviewer will ask about.
-- Devices are not listed on the account page yet (sessions are). Same follow-up.
+- Devices are not listed one by one on the account page yet (sessions are); only "forget all" is there.
 
 ## Out of scope
 Passkeys/WebAuthn, per-device friendly names, push notification on first use, and any weakening of the

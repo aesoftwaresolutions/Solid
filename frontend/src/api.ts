@@ -985,6 +985,22 @@ export const api = {
     request<{ recoveryCodes: string[] }>('/auth/mfa/activate', { method: 'POST', ...json({ code }) }),
   verifyMfa: (code: string, recoveryCode?: string) =>
     request<void>('/auth/mfa/verify', { method: 'POST', ...json(recoveryCode ? { recoveryCode } : { code }) }),
+  /** After a code was just proven: this computer may skip the code for 30 days (spec 070). */
+  trustThisDevice: () => request<{ trustedForDays: number }>('/auth/mfa/trusted-device', { method: 'POST' }),
+  /** Right after the password: true when this computer is trusted and the session is now verified. */
+  trustedCheck: async () => {
+    try {
+      await request<void>('/auth/mfa/trusted-check', { method: 'POST' });
+      return true;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return false;
+      }
+      throw error;
+    }
+  },
+  forgetTrustedDevices: () =>
+    request<{ forgotten: number }>('/auth/mfa/trusted-devices', { method: 'DELETE' }),
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
 
   organizations: () => request<Organization[]>('/orgs'),

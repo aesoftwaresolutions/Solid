@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * A trusted device skips the authenticator code for a bounded time after proving the second factor once
- * (spec 068).
+ * (spec 070).
  *
  * <p>The record is a token, never a password-equivalent: the browser holds 32 random bytes, the database
  * holds only their SHA-256, and the row dies on its expiry date whether or not it is ever cleaned up. Unlike
@@ -44,6 +44,20 @@ public class TrustedDeviceService {
      * raw token for the cookie; only its hash is stored.
      */
     public String trustThisDevice(SolidPrincipal principal, String ip, String userAgent) {
+        // The password alone must never be enough: a session still waiting for its code could otherwise mint a
+        // token and hand it straight to trusted-check, skipping the code it never entered.
+        if (!principal.mfaVerified()) {
+            throw new com.aesoftwaresolutions.solid.common.ApiProblemException(401, "MFA_REQUIRED",
+                    "Complete two-factor authentication first");
+        }
+        // And only a code proves it: a session that skipped the code through a device may not mint the next
+        // device token, or the 30 days would renew themselves forever.
+        boolean viaDevice = db.sql("select mfa_via_device from iam.session where id = ?")
+                .param(principal.sessionId()).query(Boolean.class).optional().orElse(true);
+        if (viaDevice) {
+            throw new com.aesoftwaresolutions.solid.common.ApiProblemException(409, "CODE_REQUIRED",
+                    "Enter the code from your authenticator on this computer to trust it again");
+        }
         String token = SessionTokens.newToken();
         OffsetDateTime now = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         db.sql("""
@@ -75,7 +89,8 @@ public class TrustedDeviceService {
         UUID deviceId = matches.get(0);
         db.sql("update iam.trusted_device set last_used_at = now() where id = ?").param(deviceId).update();
         db.sql("delete from iam.trusted_device where expires_at < now()").update();
-        db.sql("update iam.session set mfa_verified = true where id = ?").param(principal.sessionId()).update();
+        db.sql("update iam.session set mfa_verified = true, mfa_via_device = true where id = ?")
+                .param(principal.sessionId()).update();
         audit.record(new AuditLog.Actor(principal.userId(), ip(principal)), null, "mfa_trusted_device", "user",
                 principal.userId(), Map.of());
         return true;
@@ -95,6 +110,14 @@ public class TrustedDeviceService {
                         rs.getObject("expires_at", OffsetDateTime.class), rs.getString("ip"),
                         rs.getString("user_agent")))
                 .list();
+    }
+
+    /**
+     * Forgets every trusted device of a person, for flows that already hold their own transaction and audit
+     * entry — a changed or reset password must take the shortcut away along with the sessions.
+     */
+    public int forgetAllFor(UUID userId) {
+        return db.sql("delete from iam.trusted_device where user_id = ?").param(userId).update();
     }
 
     /** Forgets every trusted device of this person. */
