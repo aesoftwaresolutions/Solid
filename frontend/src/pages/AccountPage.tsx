@@ -148,6 +148,8 @@ export default function AccountPage() {
         )}
       </Card>
 
+      <TrustedComputersCard />
+
       <Card title="If you forget it">
         <p className="muted">
           There is no email on a server you run yourself, so there is no "forgot password" mail. An instance
@@ -157,5 +159,32 @@ export default function AccountPage() {
         </p>
       </Card>
     </main>
+  );
+}
+
+/** Computers allowed to skip the code (spec 070). The list is not shown yet; forgetting them all is. */
+function TrustedComputersCard() {
+  const [forgotten, setForgotten] = useState<number | null>(null);
+  const [error, setError] = useState<unknown>(undefined);
+  return (
+    <Card title="Trusted computers">
+      <p className="muted">
+        A computer you trusted at sign-in can skip the two-factor code for 30 days. Changing your password forgets
+        them all; so does this button.
+      </p>
+      <ErrorMessage error={error} />
+      <button
+        type="button"
+        onClick={() =>
+          api
+            .forgetTrustedDevices()
+            .then((result) => setForgotten(result.forgotten))
+            .catch(setError)
+        }
+      >
+        Forget trusted computers
+      </button>
+      {forgotten !== null && <span role="status"> Forgot {forgotten} computer(s).</span>}
+    </Card>
   );
 }

@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  const [trustComputer, setTrustComputer] = useState(false);
   const [enrollment, setEnrollment] = useState<{ secret: string; otpauthUri: string } | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [error, setError] = useState<unknown>(undefined);
@@ -47,6 +48,11 @@ export default function LoginPage() {
     void run(async () => {
       const result = await api.login(email, password);
       if (result.mfaEnrolled) {
+        // A computer that proved the code recently may skip it (spec 070); otherwise ask for the code.
+        if (await api.trustedCheck().catch(() => false)) {
+          await refresh();
+          return;
+        }
         setStep('verify');
       } else {
         setEnrollment(await api.enrollMfa());
@@ -86,6 +92,10 @@ export default function LoginPage() {
         await api.verifyMfa('', code.trim());
       } else {
         await api.verifyMfa(code.trim());
+      }
+      if (trustComputer) {
+        // Signing in has already succeeded; failing to remember this computer must not undo it.
+        await api.trustThisDevice().catch(() => undefined);
       }
       await refresh();
     });
@@ -186,6 +196,13 @@ export default function LoginPage() {
                    inputMode={useRecoveryCode ? 'text' : 'numeric'}
                    onChange={(e) => setCode(e.target.value)} />
           </label>
+          <label>
+            <input type="checkbox" checked={trustComputer} onChange={(e) => setTrustComputer(e.target.checked)} />
+            Trust this computer for 30 days
+          </label>
+          <p className="muted">
+            Next time on this computer, your password is enough. Leave this off on a shared or public computer.
+          </p>
           <button type="submit" disabled={busy}>Verify</button>{' '}
           <button type="button" className="secondary" onClick={() => setUseRecoveryCode(!useRecoveryCode)}>
             {useRecoveryCode ? 'Use authenticator code' : 'Use a recovery code'}

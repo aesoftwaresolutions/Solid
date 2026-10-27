@@ -69,5 +69,6 @@ One row per slice. Workflow: `/write-spec` → review → `/clear` → plan mode
 | 063 | A window of its own | [063](063-a-window-of-its-own.md) | Done (owner review) | 060 |
 | 064 | Closed means closed | [064](064-closed-means-closed.md) | Done (owner review) | 063 |
 | 069 | Business lines (what each part of the business earns) | [069](069-business-lines.md) | In review | 005, 006, 008, 012, 013, 057 |
+| 070 | Trust this computer (skip the code next time) | [070](070-trust-this-computer.md) | In review | 007, 048, 051 |
 
 Statuses: Not started · Draft · Approved · In progress · In review · Done

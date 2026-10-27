@@ -66,6 +66,8 @@ public class PasswordService {
                     .params(passwords.encode(newPassword), principal.userId()).update();
             db.sql("update iam.session set revoked_at = now() where user_id = ? and id <> ? and revoked_at is null")
                     .params(principal.userId(), principal.sessionId()).update();
+            // A trusted computer would let whoever holds the old password skip the code (spec 070).
+            db.sql("delete from iam.trusted_device where user_id = ?").param(principal.userId()).update();
         });
         audit.record(new AuditLog.Actor(principal.userId(), ip), null, "password_changed", "user",
                 principal.userId(), Map.of());
@@ -120,6 +122,7 @@ public class PasswordService {
             db.sql("update iam.password_reset set used_at = now() where id = ?").param(row.get("id")).update();
             db.sql("update iam.session set revoked_at = now() where user_id = ? and revoked_at is null")
                     .param(userId).update();
+            db.sql("delete from iam.trusted_device where user_id = ?").param(userId).update();
             audit.record(new AuditLog.Actor(userId, ip), null, "password_reset_used", "user", userId, Map.of());
         });
     }
