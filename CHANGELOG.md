@@ -5,6 +5,12 @@ The format follows keepachangelog.com; versions use semver.
 
 ## [Unreleased]
 
+### Security
+- Frontend build and test tools updated past published advisories (Vite, Vitest, undici, source-map-js).
+  These run only at build and test time; nothing shipped to users was affected.
+- MCP server: `zod` upgraded to 4.x (memory exhaustion advisory GHSA-mrhx-c7xc-m3w5), and the package now has a
+  lockfile so every install gets the same, audited versions.
+
 ### Added
 - Slice 069: business lines. Name the facets of a business (web design, automation, a product), choose one on
   invoices, bills, bank transactions and journal lines, and read the profit and loss with one column per line
@@ -21,7 +27,11 @@ The format follows keepachangelog.com; versions use semver.
 - Third-party license notices bundled with every desktop installer.
 - MCP server (`mcp/`) so a local LLM agent can read the books and perform a small set of safe writes.
 
+### Changed
+- Backend patch updates: PDFBox 3.0.8, springdoc-openapi 2.8.17, Spring Modulith 1.4.14.
+
 ### Fixed
+- Spec index: rows for slices 065, 067 and 068 were missing.
 - Frontend: `setupTests.ts` failed the strict type check, which broke `npm run build`.
 - Desktop remote-database slice: POSIX file tests now run on their intended OS only; a test referenced a
   helper that did not exist; remote connections now carry a socket timeout so a stalled server fails fast
