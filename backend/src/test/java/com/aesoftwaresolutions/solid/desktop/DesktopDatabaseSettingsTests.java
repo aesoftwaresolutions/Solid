@@ -23,6 +23,11 @@ import org.springframework.test.context.ActiveProfiles;
  */
 @SpringBootTest(webEnvironment = WebEnvironment.DEFINED_PORT)
 @ActiveProfiles("desktop")
+// Each desktop test class picks its own app folder in a static initializer, which Spring cannot see. With
+// identical annotations a cached context from the other class would be reused, pointing at that class's
+// folder and database. A fresh context per class, closed afterwards, keeps them apart in any run order.
+@org.springframework.test.annotation.DirtiesContext(
+        classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 @org.junit.jupiter.api.condition.EnabledOnOs(org.junit.jupiter.api.condition.OS.LINUX)
 class DesktopDatabaseSettingsTests {
 
